@@ -1,0 +1,2000 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MiniGoogle — Traditional Search vs. PageRank Algorithm</title>
+  <!-- Google Fonts: Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- D3.js v7 CDN -->
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <!-- Chart.js v4 CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            gblue: '#4285F4',
+            gred: '#EA4335',
+            gyellow: '#FBBC05',
+            ggreen: '#34A853',
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #f8fafc;
+      color: #0f172a;
+      overflow-x: hidden;
+    }
+    .google-shadow {
+      box-shadow: 0 1px 6px rgba(32, 33, 36, 0.14);
+      transition: box-shadow 0.2s ease, transform 0.15s ease;
+    }
+    .google-shadow:hover, .google-shadow:focus-within {
+      box-shadow: 0 4px 16px rgba(32, 33, 36, 0.2);
+    }
+    .tab-active {
+      border-bottom: 3px solid #4285F4;
+      color: #1a73e8;
+      font-weight: 600;
+    }
+    .fade-in {
+      animation: fadeIn 0.25s ease-out forwards;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    /* Custom scrollbar */
+    ::-webkit-scrollbar { width: 7px; height: 7px; }
+    ::-webkit-scrollbar-track { background: #f1f5f9; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
+    ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+  <!-- Top Navigation Bar -->
+  <header class="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-slate-200">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex flex-wrap items-center justify-between gap-3 py-3">
+        <!-- Brand Logo -->
+        <button onclick="switchView('search')" class="flex items-center gap-2.5 text-left focus:outline-none group">
+          <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 via-red-500 to-amber-400 flex items-center justify-center text-white font-extrabold text-lg shadow-sm group-hover:scale-105 transition">
+            M
+          </div>
+          <div>
+            <div class="text-xl font-extrabold tracking-tight leading-none">
+              <span class="text-[#4285F4]">M</span><span class="text-[#EA4335]">i</span><span class="text-[#FBBC05]">n</span><span class="text-[#4285F4]">i</span><span class="text-[#34A853]">G</span><span class="text-[#EA4335]">o</span><span class="text-[#FBBC05]">o</span><span class="text-[#4285F4]">g</span><span class="text-[#34A853]">l</span><span class="text-[#EA4335]">e</span>
+            </div>
+            <span class="text-[11px] font-medium text-slate-500">Keyword TF-IDF vs. 1998 PageRank Lab</span>
+          </div>
+        </button>
+
+        <!-- Primary Navigation Tabs -->
+        <nav class="flex items-center gap-1 sm:gap-2 overflow-x-auto max-w-full py-1" id="main-nav">
+          <button data-view="search" onclick="switchView('search')" class="nav-btn tab-active px-3 py-2 text-xs sm:text-sm rounded-t-lg whitespace-nowrap transition flex items-center gap-1.5">
+            <span>🔍</span> Search Engine
+          </button>
+          <button data-view="compare" onclick="switchView('compare')" class="nav-btn text-slate-600 hover:text-slate-900 px-3 py-2 text-xs sm:text-sm rounded-t-lg whitespace-nowrap transition flex items-center gap-1.5">
+            <span>⚖️</span> Side-by-Side Compare
+          </button>
+          <button data-view="graph" onclick="switchView('graph')" class="nav-btn text-slate-600 hover:text-slate-900 px-3 py-2 text-xs sm:text-sm rounded-t-lg whitespace-nowrap transition flex items-center gap-1.5">
+            <span>🕸️</span> PageRank Graph
+          </button>
+          <button data-view="admin" onclick="switchView('admin')" class="nav-btn text-slate-600 hover:text-slate-900 px-3 py-2 text-xs sm:text-sm rounded-t-lg whitespace-nowrap transition flex items-center gap-1.5">
+            <span>🛠️</span> Index & Admin
+          </button>
+          <button data-view="learn" onclick="switchView('learn')" class="nav-btn text-slate-600 hover:text-slate-900 px-3 py-2 text-xs sm:text-sm rounded-t-lg whitespace-nowrap transition flex items-center gap-1.5">
+            <span>🎓</span> How MiniGoogle Works
+          </button>
+        </nav>
+      </div>
+    </div>
+  </header>
+
+  <!-- Toast Notification Banner -->
+  <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+  <!-- Main Content Container -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+
+    <!-- ========================================================= -->
+    <!-- VIEW 1: SEARCH ENGINE HOMEPAGE & RESULTS                  -->
+    <!-- ========================================================= -->
+    <section id="view-search" class="fade-in space-y-6">
+      <!-- Hero Search Box Card -->
+      <div class="bg-white rounded-3xl border border-slate-200/90 p-6 sm:p-8 shadow-sm">
+        <div class="max-w-3xl mx-auto text-center space-y-4">
+          <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 border border-blue-100 text-blue-700 text-xs font-medium">
+            <span>📚 Educational Simulated Web Index</span>
+            <span>•</span>
+            <span id="hero-stats-badge">6 Domains • 30 Webpages • Live PageRank</span>
+          </div>
+
+          <h1 class="text-3xl sm:text-5xl font-extrabold tracking-tight">
+            <span class="text-[#4285F4]">M</span><span class="text-[#EA4335]">i</span><span class="text-[#FBBC05]">n</span><span class="text-[#4285F4]">i</span><span class="text-[#34A853]">G</span><span class="text-[#EA4335]">o</span><span class="text-[#FBBC05]">o</span><span class="text-[#4285F4]">g</span><span class="text-[#34A853]">l</span><span class="text-[#EA4335]">e</span>
+          </h1>
+          <p class="text-sm sm:text-base text-slate-600 max-w-2xl mx-auto">
+            Compare how <strong>Traditional Keyword Relevance</strong> differs from <strong>Larry Page &amp; Sergey Brin’s 1998 PageRank</strong> across a hyperlinked network of Pune food &amp; pizza websites.
+          </p>
+
+          <!-- Search Input Form -->
+          <form onsubmit="handleSearchSubmit(event)" class="relative max-w-2xl mx-auto pt-2">
+            <div class="flex items-center bg-white border border-slate-300 rounded-full px-4 py-2.5 google-shadow">
+              <span class="text-slate-400 mr-3 text-lg">🔍</span>
+              <input
+                id="search-input"
+                type="text"
+                value="Best pizza in Pune"
+                placeholder="Search e.g. 'Best pizza in Pune', 'Cheap food near college', 'Pizza recipes'..."
+                class="w-full bg-transparent text-slate-900 placeholder-slate-400 text-base sm:text-lg focus:outline-none"
+                autocomplete="off"
+              />
+              <button type="button" onclick="clearSearchInput()" title="Clear query" class="text-slate-400 hover:text-slate-600 px-2 text-sm">✕</button>
+              <button type="submit" class="ml-2 bg-[#4285F4] hover:bg-blue-600 text-white font-semibold px-5 py-2 rounded-full text-sm transition shadow-sm shrink-0">
+                Search
+              </button>
+            </div>
+          </form>
+
+          <!-- Algorithm Switcher Pills -->
+          <div class="pt-2 flex flex-col sm:flex-row items-center justify-center gap-2">
+            <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Ranking Algorithm:</span>
+            <div class="inline-flex flex-wrap justify-center bg-slate-100 p-1 rounded-2xl border border-slate-200 gap-1" id="algo-switcher">
+              <button type="button" data-algo="old" onclick="setAlgorithm('old')" class="algo-btn px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition">
+                A. Old Algorithm (TF-IDF Keyword)
+              </button>
+              <button type="button" data-algo="pagerank" onclick="setAlgorithm('pagerank')" class="algo-btn px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition">
+                B. PageRank Algorithm (Link Authority)
+              </button>
+              <button type="button" data-algo="combined" onclick="setAlgorithm('combined')" class="algo-btn px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition">
+                C. Combined (70% Keyword + 30% PR)
+              </button>
+            </div>
+          </div>
+
+          <!-- Sample Test Queries -->
+          <div class="pt-2 space-y-2">
+            <div class="text-xs font-medium text-slate-500">Try Benchmark Test Queries:</div>
+            <div class="flex flex-wrap justify-center gap-1.5" id="sample-queries">
+              <!-- Populated by JS -->
+            </div>
+          </div>
+
+          <!-- Recent Search History -->
+          <div id="search-history-bar" class="hidden pt-1 flex flex-wrap items-center justify-center gap-1.5 text-xs">
+            <span class="text-slate-400 font-medium">Recent:</span>
+            <div id="search-history-chips" class="flex flex-wrap justify-center gap-1.5"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Filter Bar & Search Statistics -->
+      <div class="bg-white rounded-2xl border border-slate-200 p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div class="flex flex-wrap items-center gap-2">
+          <label for="domain-filter" class="text-xs font-semibold text-slate-600">Domain Filter:</label>
+          <select id="domain-filter" onchange="executeSearch()" class="bg-slate-50 border border-slate-300 text-slate-800 text-xs sm:text-sm rounded-xl px-3 py-1.5 focus:outline-none focus:border-blue-500">
+            <option value="ALL">All 6 Indexed Websites</option>
+          </select>
+
+          <label for="sort-override" class="text-xs font-semibold text-slate-600 ml-1">Sort Order:</label>
+          <select id="sort-override" onchange="executeSearch()" class="bg-slate-50 border border-slate-300 text-slate-800 text-xs sm:text-sm rounded-xl px-3 py-1.5 focus:outline-none focus:border-blue-500">
+            <option value="algo">Selected Algorithm Score (Default)</option>
+            <option value="inlinks">Most Incoming Hyperlinks</option>
+            <option value="title">Alphabetical (A–Z)</option>
+          </select>
+
+          <!-- Pure PageRank Mode Toggle (Only visible when PageRank is selected) -->
+          <div id="pr-mode-box" class="hidden items-center gap-2 bg-amber-50 border border-amber-200 px-3 py-1 rounded-xl">
+            <span class="text-xs font-semibold text-amber-800">PageRank Mode:</span>
+            <select id="pr-scope" onchange="executeSearch()" class="bg-white border border-amber-300 text-amber-900 text-xs rounded-lg px-2 py-1 focus:outline-none">
+              <option value="matched">Query-Filtered Pages Ranked by PageRank</option>
+              <option value="global">Pure Global PageRank (Ignores Query Keywords!)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-3 text-xs text-slate-600">
+          <span id="search-stats-text" class="font-medium">Showing results...</span>
+          <button onclick="switchView('compare')" class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-semibold px-3 py-1.5 rounded-xl transition">
+            ⚖️ Compare All 3 Side-by-Side
+          </button>
+        </div>
+      </div>
+
+      <!-- Educational Notice Banner for PageRank -->
+      <div id="pagerank-distinction-banner" class="hidden bg-amber-50 border-l-4 border-amber-500 rounded-r-2xl p-4 text-xs sm:text-sm text-amber-950 shadow-sm">
+        <div class="font-bold flex items-center gap-1.5">
+          <span>💡 Crucial Computer Science Distinction: Pure PageRank is Query-Independent!</span>
+        </div>
+        <p class="mt-1 text-amber-900 leading-relaxed">
+          Google’s original PageRank formula <code class="bg-amber-100 px-1.5 py-0.5 rounded font-mono text-xs">PR(A) = (1-d)/N + d · Σ[PR(Ti)/C(Ti)]</code> measures a webpage’s <strong>structural link authority</strong> across the web graph—not whether the page mentions your search words. Switch between <em>"Query-Filtered Pages Ranked by PageRank"</em> and <em>"Pure Global PageRank"</em> above to observe how pure PageRank elevates authoritative hubs regardless of query keywords!
+        </p>
+      </div>
+
+      <!-- Search Results List -->
+      <div id="search-results-container" class="space-y-4">
+        <!-- Populated dynamically -->
+      </div>
+    </section>
+
+    <!-- ========================================================= -->
+    <!-- VIEW 2: SIDE-BY-SIDE ALGORITHM COMPARISON DASHBOARD       -->
+    <!-- ========================================================= -->
+    <section id="view-compare" class="hidden fade-in space-y-6">
+      <div class="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-4">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h2 class="text-2xl font-extrabold text-slate-900">Side-by-Side Algorithm Comparison</h2>
+            <p class="text-sm text-slate-600">Compare how the exact same search query produces different rankings under Old TF-IDF, PageRank, and Combined scoring.</p>
+          </div>
+          <form onsubmit="handleCompareSearch(event)" class="flex items-center gap-2 w-full md:w-auto">
+            <input id="compare-query-input" type="text" class="w-full md:w-72 bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:border-blue-500" placeholder="Enter query to compare..." />
+            <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-xl text-sm transition shrink-0">
+              Run Comparison
+            </button>
+          </form>
+        </div>
+
+        <!-- Automated Insight Box -->
+        <div id="comparison-explanation-box" class="bg-blue-50/80 border border-blue-200 rounded-2xl p-4 text-sm text-slate-800 leading-relaxed">
+          <!-- Populated dynamically -->
+        </div>
+      </div>
+
+      <!-- 3-Column Live Ranking Comparison -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-5" id="three-col-comparison">
+        <!-- Column 1: Old Algorithm -->
+        <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm flex flex-col">
+          <div class="bg-slate-800 text-white p-4">
+            <div class="text-xs uppercase tracking-wider text-slate-300 font-semibold">Method 1 • Content Only</div>
+            <h3 class="text-lg font-bold">Old Keyword Algorithm</h3>
+            <p class="text-xs text-slate-300 mt-0.5">Ranks by TF-IDF, Title, Meta &amp; Frequency</p>
+          </div>
+          <div id="compare-col-old" class="p-4 space-y-3 flex-1"></div>
+        </div>
+
+        <!-- Column 2: PageRank Algorithm -->
+        <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm flex flex-col">
+          <div class="bg-emerald-700 text-white p-4">
+            <div class="text-xs uppercase tracking-wider text-emerald-200 font-semibold">Method 2 • Link Authority</div>
+            <h3 class="text-lg font-bold">Google PageRank (1998)</h3>
+            <p class="text-xs text-emerald-100 mt-0.5">Ranks matching pages by Link Graph Authority</p>
+          </div>
+          <div id="compare-col-pr" class="p-4 space-y-3 flex-1"></div>
+        </div>
+
+        <!-- Column 3: Combined Algorithm -->
+        <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm flex flex-col">
+          <div class="bg-blue-600 text-white p-4">
+            <div class="text-xs uppercase tracking-wider text-blue-200 font-semibold">Method 3 • Hybrid Balance</div>
+            <h3 class="text-lg font-bold" id="compare-combined-title">Combined (70% KW + 30% PR)</h3>
+            <p class="text-xs text-blue-100 mt-0.5">Balances Query Relevance &amp; Page Importance</p>
+          </div>
+          <div id="compare-col-combined" class="p-4 space-y-3 flex-1"></div>
+        </div>
+      </div>
+
+      <!-- Score Breakdown Bar Chart -->
+      <div class="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm">
+        <h3 class="text-lg font-bold text-slate-900 mb-1">Normalized Score Comparison Chart (Top Matching Pages)</h3>
+        <p class="text-xs text-slate-500 mb-4">Visualizing Normalized Keyword Score vs. Normalized PageRank Score vs. Weighted Combined Score (0–100 scale).</p>
+        <div class="h-80 w-full">
+          <canvas id="comparison-chart"></canvas>
+        </div>
+      </div>
+
+      <!-- Theoretical Feature Comparison Table -->
+      <div class="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm overflow-x-auto">
+        <h3 class="text-lg font-bold text-slate-900 mb-3">Conceptual Comparison: Traditional Search vs. PageRank</h3>
+        <table class="w-full text-left border-collapse text-sm">
+          <thead>
+            <tr class="bg-slate-100 text-slate-700 border-b border-slate-200">
+              <th class="py-3 px-4 font-bold rounded-tl-xl">Feature</th>
+              <th class="py-3 px-4 font-bold">Old Algorithm (Keyword-Based)</th>
+              <th class="py-3 px-4 font-bold rounded-tr-xl">Google PageRank Algorithm</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-200">
+            <tr>
+              <td class="py-3 px-4 font-semibold text-slate-800">Main principle</td>
+              <td class="py-3 px-4 text-slate-600">Keyword matching &amp; term frequency (TF-IDF)</td>
+              <td class="py-3 px-4 text-slate-600">Link-based importance &amp; democratic voting</td>
+            </tr>
+            <tr class="bg-slate-50/60">
+              <td class="py-3 px-4 font-semibold text-slate-800">Uses page content</td>
+              <td class="py-3 px-4 text-emerald-700 font-medium">Yes (Title, Meta, Body keywords)</td>
+              <td class="py-3 px-4 text-amber-700 font-medium">No, not directly (analyzes link structure)</td>
+            </tr>
+            <tr>
+              <td class="py-3 px-4 font-semibold text-slate-800">Uses hyperlinks</td>
+              <td class="py-3 px-4 text-slate-600">Not required</td>
+              <td class="py-3 px-4 text-emerald-700 font-medium">Yes (Directed graph of incoming/outgoing links)</td>
+            </tr>
+            <tr class="bg-slate-50/60">
+              <td class="py-3 px-4 font-semibold text-slate-800">Query-dependent</td>
+              <td class="py-3 px-4 text-slate-600">Yes — scores change with every query</td>
+              <td class="py-3 px-4 text-slate-600">No — precomputed globally across the web graph</td>
+            </tr>
+            <tr>
+              <td class="py-3 px-4 font-semibold text-slate-800">Ranking basis</td>
+              <td class="py-3 px-4 text-slate-600">Textual Relevance</td>
+              <td class="py-3 px-4 text-slate-600">Authority / Importance</td>
+            </tr>
+            <tr class="bg-slate-50/60">
+              <td class="py-3 px-4 font-semibold text-slate-800">Output</td>
+              <td class="py-3 px-4 text-slate-600">Most keyword-dense pages (vulnerable to keyword stuffing)</td>
+              <td class="py-3 px-4 text-slate-600">Most trusted &amp; heavily cited pages</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ========================================================= -->
+    <!-- VIEW 3: INTERACTIVE PAGERANK NETWORK & VISUALIZATION       -->
+    <!-- ========================================================= -->
+    <section id="view-graph" class="hidden fade-in space-y-6">
+      <div class="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-4">
+        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div>
+            <h2 class="text-2xl font-extrabold text-slate-900">Interactive PageRank Directed Link Graph</h2>
+            <p class="text-sm text-slate-600">Node radius scales with PageRank score. Arrows indicate hyperlink flow (<code class="text-xs bg-slate-100 px-1.5 py-0.5 rounded">Source → Target</code>). Click any node to inspect links.</p>
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
+            <button id="btn-graph-full" onclick="setGraphMode('full')" class="px-3.5 py-2 rounded-xl text-xs font-bold bg-blue-600 text-white shadow-sm transition">
+              Full Web Index (30 Pages)
+            </button>
+            <button id="btn-graph-canonical" onclick="setGraphMode('canonical')" class="px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 transition">
+              6-Node Canonical Demo (1→2, 2→1,3, 3→2,4, 4→2,5, 5→2, 6→1)
+            </button>
+          </div>
+        </div>
+
+        <!-- Domain Color Legend -->
+        <div id="graph-legend" class="flex flex-wrap items-center gap-3 pt-1 text-xs"></div>
+
+        <!-- Main Graph + Inspector Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+          <!-- D3 SVG Container -->
+          <div class="lg:col-span-2 bg-slate-900 rounded-2xl border border-slate-800 relative overflow-hidden" style="height: 500px;">
+            <div class="absolute top-3 left-3 z-10 bg-slate-800/90 backdrop-blur text-slate-200 text-xs px-3 py-1.5 rounded-xl border border-slate-700">
+              Drag nodes • Scroll to zoom • Click node for details
+            </div>
+            <svg id="pagerank-svg" class="w-full h-full cursor-grab active:cursor-grabbing"></svg>
+          </div>
+
+          <!-- Selected Node Inspector -->
+          <div class="bg-slate-50 rounded-2xl border border-slate-200 p-4 flex flex-col justify-between space-y-4">
+            <div id="node-inspector-content" class="space-y-3">
+              <div class="text-xs font-bold uppercase tracking-wider text-blue-600">Node Inspector</div>
+              <h3 class="text-lg font-bold text-slate-900">Click any node in the graph</h3>
+              <p class="text-xs text-slate-600">Select a webpage node to inspect its PageRank authority score, incoming backlinks, and outgoing link dilution.</p>
+            </div>
+
+            <!-- Step-by-Step Iteration Player -->
+            <div class="bg-white rounded-xl border border-slate-200 p-3.5 space-y-2.5">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-bold text-slate-800">Step-by-Step PageRank Iterations</span>
+                <span id="iter-badge" class="text-xs font-mono bg-blue-100 text-blue-800 px-2 py-0.5 rounded-md font-semibold">Iter 0</span>
+              </div>
+              <input id="iter-slider" type="range" min="0" max="20" value="20" oninput="handleIterationScrub(this.value)" class="w-full accent-blue-600 cursor-pointer" />
+              <div class="flex items-center justify-between text-[11px] text-slate-500">
+                <button type="button" onclick="stepIteration(-1)" class="px-2 py-1 bg-slate-100 hover:bg-slate-200 rounded font-semibold text-slate-700">◀ Prev</button>
+                <span id="iter-delta-label">Converged</span>
+                <button type="button" onclick="stepIteration(1)" class="px-2 py-1 bg-slate-100 hover:bg-slate-200 rounded font-semibold text-slate-700">Next ▶</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PageRank Distribution Chart & Iteration Table -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm">
+          <h3 class="text-lg font-bold text-slate-900 mb-1">Top Indexed Webpages by PageRank Score</h3>
+          <p class="text-xs text-slate-500 mb-4">Normalized PageRank scores across all indexed webpages (Sum of all PR = 1.0000).</p>
+          <div class="h-80">
+            <canvas id="pr-distribution-chart"></canvas>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm flex flex-col">
+          <h3 class="text-lg font-bold text-slate-900 mb-1">6-Node Canonical Graph Convergence Trace</h3>
+          <p class="text-xs text-slate-500 mb-3">
+            Live calculation for <code class="bg-slate-100 px-1 rounded font-mono">1→2, 2→1,3, 3→2,4, 4→2,5, 5→2, 6→1</code> (<code class="font-mono">d = 0.85</code>). Notice how Page 2 and Page 1 accumulate the highest PageRank!
+          </p>
+          <div class="overflow-x-auto flex-1">
+            <table class="w-full text-left border-collapse text-xs font-mono" id="canonical-trace-table">
+              <!-- Populated by JS -->
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================================= -->
+    <!-- VIEW 4: ADMIN DASHBOARD & INDEX EDITOR                    -->
+    <!-- ========================================================= -->
+    <section id="view-admin" class="hidden fade-in space-y-6">
+      <!-- Top Controls & Mathematical Parameters -->
+      <div class="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-5">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+          <div>
+            <h2 class="text-2xl font-extrabold text-slate-900">Admin Dashboard &amp; Search Index Manager</h2>
+            <p class="text-sm text-slate-600">Edit webpages, add or remove hyperlinks, adjust algorithm weights, and immediately watch PageRank &amp; search rankings recalculate.</p>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <button onclick="recalculateAllAndNotify()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded-xl text-xs sm:text-sm shadow-sm transition">
+              🔄 Recalculate PageRank
+            </button>
+            <button onclick="resetDemoDatabase()" class="bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-semibold px-4 py-2 rounded-xl text-xs sm:text-sm transition">
+              ♻️ Reset Demo Data
+            </button>
+          </div>
+        </div>
+
+        <!-- Index Statistics Cards -->
+        <div class="grid grid-cols-2 sm:grid-cols-5 gap-3" id="admin-stats-cards">
+          <!-- Populated by JS -->
+        </div>
+
+        <!-- Hyperparameters: Damping Factor & Combined Weights -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-5 pt-2">
+          <div class="bg-slate-50 rounded-2xl border border-slate-200 p-4 space-y-2">
+            <div class="flex justify-between items-center">
+              <label class="text-sm font-bold text-slate-800">PageRank Damping Factor (d)</label>
+              <span id="damping-val-label" class="font-mono text-sm font-bold text-blue-600 bg-blue-50 px-2.5 py-0.5 rounded-lg border border-blue-200">0.85</span>
+            </div>
+            <input id="admin-damping-slider" type="range" min="0.10" max="0.99" step="0.01" value="0.85" oninput="updateHyperparameters()" class="w-full accent-blue-600" />
+            <p class="text-xs text-slate-500">Probability a random surfer continues clicking links (standard Google value = 0.85). Probability of jumping randomly = <span id="teleport-val-label" class="font-mono font-semibold">0.15</span>.</p>
+          </div>
+
+          <div class="bg-slate-50 rounded-2xl border border-slate-200 p-4 space-y-2">
+            <div class="flex justify-between items-center">
+              <label class="text-sm font-bold text-slate-800">Combined Algorithm Weights</label>
+              <span id="weight-val-label" class="font-mono text-xs font-bold text-indigo-700 bg-indigo-50 px-2.5 py-0.5 rounded-lg border border-indigo-200">70% Keyword / 30% PR</span>
+            </div>
+            <input id="admin-weight-slider" type="range" min="0" max="100" step="5" value="70" oninput="updateHyperparameters()" class="w-full accent-indigo-600" />
+            <p class="text-xs text-slate-500">Adjust balance between Traditional Keyword Relevance and PageRank Link Authority.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Add Hyperlink & Add Domain/Webpage Forms -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Link Manager -->
+        <div class="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-4">
+          <h3 class="text-lg font-bold text-slate-900">🔗 Directed Hyperlink Manager</h3>
+          <p class="text-xs text-slate-600">Add a directed hyperlink from a Source Webpage to a Target Webpage to transfer PageRank authority.</p>
+
+          <form onsubmit="handleAddHyperlink(event)" class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+            <select id="link-source-select" class="bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-blue-500"></select>
+            <select id="link-target-select" class="bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-blue-500"></select>
+            <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl px-3 py-2 text-xs transition">
+              + Add Directed Link
+            </button>
+          </form>
+
+          <div class="max-h-72 overflow-y-auto border border-slate-200 rounded-2xl divide-y divide-slate-100" id="admin-links-list">
+            <!-- Populated dynamically -->
+          </div>
+        </div>
+
+        <!-- Add Webpage / Domain Form -->
+        <div class="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-4">
+          <h3 class="text-lg font-bold text-slate-900">➕ Add New Webpage or Domain</h3>
+          <form onsubmit="handleAddWebpage(event)" class="space-y-3 text-xs">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label class="font-semibold text-slate-700 block mb-1">Domain (select or type new)</label>
+                <input id="new-page-domain" list="domain-datalist" required placeholder="e.g. best-pizza-pune.com" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 focus:outline-none focus:border-blue-500" />
+                <datalist id="domain-datalist"></datalist>
+              </div>
+              <div>
+                <label class="font-semibold text-slate-700 block mb-1">URL Path Slug</label>
+                <input id="new-page-slug" required placeholder="e.g. /wood-fired-margherita" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 focus:outline-none focus:border-blue-500" />
+              </div>
+            </div>
+            <div>
+              <label class="font-semibold text-slate-700 block mb-1">Page Title</label>
+              <input id="new-page-title" required placeholder="e.g. Authentic Wood-Fired Margherita Pizza in Koregaon Park Pune" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 focus:outline-none focus:border-blue-500" />
+            </div>
+            <div>
+              <label class="font-semibold text-slate-700 block mb-1">Meta Description</label>
+              <input id="new-page-desc" required placeholder="Short summary shown in search results..." class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 focus:outline-none focus:border-blue-500" />
+            </div>
+            <div>
+              <label class="font-semibold text-slate-700 block mb-1">Keywords (comma-separated)</label>
+              <input id="new-page-keywords" required placeholder="pizza, pune, margherita, italian food" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 focus:outline-none focus:border-blue-500" />
+            </div>
+            <div>
+              <label class="font-semibold text-slate-700 block mb-1">Main Page Content</label>
+              <textarea id="new-page-content" rows="2" required placeholder="Full text content indexed by the TF-IDF keyword engine..." class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 focus:outline-none focus:border-blue-500"></textarea>
+            </div>
+            <button type="submit" class="w-full bg-slate-900 hover:bg-slate-800 text-white font-semibold py-2.5 rounded-xl transition">
+              Index Webpage &amp; Recalculate PageRank
+            </button>
+          </form>
+        </div>
+      </div>
+
+      <!-- Indexed Webpages Table with Inline Edit & Delete -->
+      <div class="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm space-y-4">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <h3 class="text-lg font-bold text-slate-900">📄 Indexed Webpages Database</h3>
+          <input id="admin-page-filter" oninput="renderAdminPagesTable()" placeholder="Filter indexed pages..." class="bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 text-xs w-full sm:w-64 focus:outline-none focus:border-blue-500" />
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr class="bg-slate-100 text-slate-700 border-b border-slate-200">
+                <th class="py-2.5 px-3 font-bold">ID</th>
+                <th class="py-2.5 px-3 font-bold">Title &amp; URL</th>
+                <th class="py-2.5 px-3 font-bold">Domain</th>
+                <th class="py-2.5 px-3 font-bold text-center">In / Out Links</th>
+                <th class="py-2.5 px-3 font-bold text-right">PageRank Score</th>
+                <th class="py-2.5 px-3 font-bold text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="admin-pages-tbody" class="divide-y divide-slate-200">
+              <!-- Populated dynamically -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================================= -->
+    <!-- VIEW 5: EDUCATIONAL GUIDE ("HOW MINIGOOGLE WORKS")        -->
+    <!-- ========================================================= -->
+    <section id="view-learn" class="hidden fade-in space-y-6">
+      <div class="bg-gradient-to-br from-slate-900 via-slate-800 to-blue-950 text-white rounded-3xl p-6 sm:p-10 shadow-md">
+        <div class="max-w-3xl space-y-3">
+          <span class="inline-block bg-blue-500/20 border border-blue-400/30 text-blue-200 text-xs font-semibold px-3 py-1 rounded-full">
+            Stanford University • 1996–1998 Research Milestone
+          </span>
+          <h2 class="text-3xl sm:text-4xl font-extrabold tracking-tight">How MiniGoogle Works</h2>
+          <p class="text-slate-300 text-sm sm:text-base leading-relaxed">
+            In 1998, Stanford PhD students <strong>Larry Page</strong> and <strong>Sergey Brin</strong> published <em>"The Anatomy of a Large-Scale Hypertextual Web Search Engine"</em>, forever changing how humanity retrieves information by treating hyperlinks as votes of confidence.
+          </p>
+        </div>
+      </div>
+
+      <!-- 9 Core Educational Concepts Grid -->
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-2">
+          <div class="text-xs font-bold text-blue-600 uppercase">01 • Foundations</div>
+          <h3 class="text-base font-bold text-slate-900">What is a Search Engine?</h3>
+          <p class="text-xs sm:text-sm text-slate-600 leading-relaxed">
+            A search engine performs three core tasks: <strong>Crawling</strong> (discovering webpages via links), <strong>Indexing</strong> (storing words and link structures in a fast database), and <strong>Ranking</strong> (ordering matching documents from best to worst for a user query).
+          </p>
+        </div>
+
+        <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-2">
+          <div class="text-xs font-bold text-blue-600 uppercase">02 • Early 1990s Web</div>
+          <h3 class="text-base font-bold text-slate-900">Traditional Keyword-Based Search</h3>
+          <p class="text-xs sm:text-sm text-slate-600 leading-relaxed">
+            Early engines (like AltaVista and WebCrawler) ranked pages almost solely by counting query words using <strong>TF-IDF</strong> (Term Frequency–Inverse Document Frequency). Spammers easily exploited this by repeating hidden keywords hundreds of times ("keyword stuffing").
+          </p>
+        </div>
+
+        <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-2">
+          <div class="text-xs font-bold text-emerald-600 uppercase">03 • The Breakthrough</div>
+          <h3 class="text-base font-bold text-slate-900">What is PageRank?</h3>
+          <p class="text-xs sm:text-sm text-slate-600 leading-relaxed">
+            Named after Larry Page (and web pages), PageRank measures a webpage’s objective importance using the web’s hyperlink graph. A link from Page A to Page B is interpreted as Page A casting a vote for Page B—weighted by Page A’s own importance.
+          </p>
+        </div>
+
+        <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-2">
+          <div class="text-xs font-bold text-emerald-600 uppercase">04 • History</div>
+          <h3 class="text-base font-bold text-slate-900">Who Developed PageRank &amp; Why?</h3>
+          <p class="text-xs sm:text-sm text-slate-600 leading-relaxed">
+            Developed in 1996 at Stanford University by <strong>Larry Page and Sergey Brin</strong> (initially nicknamed <em>BackRub</em>). It solved the crisis of low-quality spam results by leveraging human editorial judgment embedded in hyperlinks across the web.
+          </p>
+        </div>
+
+        <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-2">
+          <div class="text-xs font-bold text-purple-600 uppercase">05 • Probability Model</div>
+          <h3 class="text-base font-bold text-slate-900">The Random-Surfer Model</h3>
+          <p class="text-xs sm:text-sm text-slate-600 leading-relaxed">
+            Imagine a web surfer clicking links at random forever. With probability <code class="bg-slate-100 px-1 rounded">d = 0.85</code>, they click a random outgoing link on the current page. With probability <code class="bg-slate-100 px-1 rounded">1 - d = 0.15</code>, they get bored and jump to any random page in the index.
+          </p>
+        </div>
+
+        <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-2">
+          <div class="text-xs font-bold text-purple-600 uppercase">06 • Mathematical Stability</div>
+          <h3 class="text-base font-bold text-slate-900">What is the Damping Factor (d)?</h3>
+          <p class="text-xs sm:text-sm text-slate-600 leading-relaxed">
+            Set to <strong>0.85</strong>, the damping factor prevents "rank sinks" (pages with incoming links but no outgoing links) from trapping all probability mass and guarantees that iterative power-method calculations converge rapidly to a unique steady state.
+          </p>
+        </div>
+
+        <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-2">
+          <div class="text-xs font-bold text-amber-600 uppercase">07 • Link Mechanics</div>
+          <h3 class="text-base font-bold text-slate-900">Incoming vs. Outgoing Links</h3>
+          <p class="text-xs sm:text-sm text-slate-600 leading-relaxed">
+            More <strong>incoming links</strong> increase a page’s PageRank—especially if those linking pages have high PageRank themselves. However, if a page has many <strong>outgoing links</strong> <code class="bg-slate-100 px-1 rounded">C(Ti)</code>, its vote is divided equally among all targets.
+          </p>
+        </div>
+
+        <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-2">
+          <div class="text-xs font-bold text-amber-600 uppercase">08 • Search Architecture</div>
+          <h3 class="text-base font-bold text-slate-900">Relevance vs. Importance</h3>
+          <p class="text-xs sm:text-sm text-slate-600 leading-relaxed">
+            <strong>Relevance</strong> asks: <em>"Does this page match the user's query words?"</em> (Query-dependent). <strong>Importance</strong> asks: <em>"Is this page a trusted authority?"</em> (Query-independent). Modern engines combine both signals!
+          </p>
+        </div>
+
+        <div class="bg-slate-900 text-white rounded-2xl border border-slate-800 p-5 shadow-sm space-y-2">
+          <div class="text-xs font-bold text-amber-400 uppercase">09 • The Master Equation</div>
+          <h3 class="text-base font-bold">Classic PageRank Formula</h3>
+          <div class="bg-slate-800 rounded-xl p-3 font-mono text-xs text-emerald-300 overflow-x-auto">
+            PR(A) = (1 - d) / N + d · Σ [ PR(Ti) / C(Ti) ]
+          </div>
+          <p class="text-xs text-slate-300 leading-relaxed">
+            Where <strong>N</strong> is total indexed pages, <strong>Ti</strong> are pages linking to <strong>A</strong>, and <strong>C(Ti)</strong> is the out-degree of page <strong>Ti</strong>. Dangling pages redistribute <code class="text-amber-300">PR / N</code> to every page.
+          </p>
+        </div>
+      </div>
+
+      <!-- Python Flask + SQLite + NetworkX Reference Blueprint (Collapsible) -->
+      <details class="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm">
+        <summary class="cursor-pointer font-bold text-slate-900 text-base flex items-center justify-between">
+          <span>🐍 Reference Backend Architecture: Python Flask + SQLite + NetworkX + VS Code Setup Guide</span>
+          <span class="text-xs text-blue-600 font-semibold">Click to expand</span>
+        </summary>
+        <div class="mt-4 space-y-4 text-xs text-slate-700 border-t border-slate-100 pt-4">
+          <p>
+            While this standalone HTML file executes the complete TF-IDF search engine, 1998 iterative PageRank solver, SQLite-like persistent localStorage database, D3.js network visualizer, and Chart.js comparison suite directly in your browser with zero server setup, here is the equivalent <strong>Python Flask + SQLite + NetworkX</strong> backend blueprint and VS Code setup guide:
+          </p>
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div class="bg-slate-900 text-slate-100 rounded-2xl p-4 font-mono overflow-x-auto">
+              <div class="text-emerald-400 font-bold mb-2"># app.py (Python Flask + SQLite + NetworkX Reference)</div>
+<pre class="text-[11px] leading-relaxed">import sqlite3, math
+import networkx as nx
+from flask import Flask, request, jsonify
+
+app = Flask(__name__)
+
+def compute_pagerank_sqlite(db_path="minigoogle.db", d=0.85):
+    conn = sqlite3.connect(db_path)
+    cur = conn.cursor()
+    pages = [r[0] for r in cur.execute("SELECT id FROM webpages")]
+    links = cur.execute("SELECT source_id, target_id FROM hyperlinks").fetchall()
+
+    G = nx.DiGraph()
+    G.add_nodes_from(pages)
+    G.add_edges_from(links)
+
+    # Exact 1998 iterative PageRank with dangling node handling
+    scores = nx.pagerank(G, alpha=d, tol=1e-6, max_iter=100)
+    for pid, pr in scores.items():
+        cur.execute("UPDATE webpages SET pagerank = ? WHERE id = ?", (pr, pid))
+    conn.commit()
+    conn.close()
+    return scores</pre>
+            </div>
+            <div class="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-2">
+              <div class="font-bold text-slate-900 text-sm">README &amp; Step-by-Step VS Code Setup</div>
+              <ol class="list-decimal list-inside space-y-1.5 text-slate-700">
+                <li><strong>Instant Browser Run:</strong> Open <code class="bg-white px-1.5 py-0.5 rounded border">index.html</code> directly in Chrome/Edge or via VS Code <em>Live Server</em>.</li>
+                <li><strong>Optional Python Environment:</strong> Open terminal in VS Code (<code class="bg-white px-1 rounded">Ctrl+`</code>) and run:
+                  <code class="block bg-slate-900 text-emerald-300 p-2 rounded-lg mt-1 font-mono">python -m venv venv && source venv/bin/activate<br/>pip install flask networkx scikit-learn</code>
+                </li>
+                <li><strong>Verify Benchmark Queries:</strong> Test <em>"Best pizza in Pune"</em>, <em>"Cheap food near college"</em>, <em>"Pizza recipes"</em>, <em>"Best restaurants in Pune"</em>, <em>"College canteen food"</em>, and <em>"Popular pizza websites"</em> across all 3 algorithms.</li>
+              </ol>
+            </div>
+          </div>
+        </div>
+      </details>
+    </section>
+
+  </main>
+
+  <!-- ========================================================= -->
+  <!-- MODAL: SIMULATED WEBPAGE READER & SCORE INSPECTOR         -->
+  <!-- ========================================================= -->
+  <div id="webpage-modal" class="fixed inset-0 z-50 hidden bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-slate-200 p-6 space-y-5">
+      <div class="flex items-start justify-between gap-4 border-b border-slate-100 pb-4">
+        <div>
+          <div id="modal-domain-badge" class="inline-block text-xs font-bold px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 mb-1"></div>
+          <h3 id="modal-title" class="text-xl font-extrabold text-slate-900"></h3>
+          <div id="modal-url" class="text-xs font-mono text-emerald-700 mt-0.5"></div>
+        </div>
+        <button onclick="closeWebpageModal()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-full w-8 h-8 flex items-center justify-center font-bold">✕</button>
+      </div>
+
+      <div class="space-y-3 text-sm text-slate-700">
+        <div class="bg-slate-50 rounded-2xl p-3.5 border border-slate-200">
+          <div class="text-xs font-bold uppercase text-slate-400 mb-1">Meta Description</div>
+          <p id="modal-desc" class="text-slate-700"></p>
+        </div>
+
+        <div>
+          <div class="text-xs font-bold uppercase text-slate-400 mb-1">Simulated Webpage Body Content</div>
+          <p id="modal-content" class="leading-relaxed text-slate-800 bg-white border border-slate-200 rounded-2xl p-4"></p>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+          <div class="bg-emerald-50/70 border border-emerald-200 rounded-2xl p-3">
+            <div class="text-xs font-bold text-emerald-900 mb-1.5">⬅️ Incoming Hyperlinks (Votes Received)</div>
+            <ul id="modal-inlinks" class="space-y-1 text-xs text-emerald-800"></ul>
+          </div>
+          <div class="bg-blue-50/70 border border-blue-200 rounded-2xl p-3">
+            <div class="text-xs font-bold text-blue-900 mb-1.5">➡️ Outgoing Hyperlinks (Links Cited)</div>
+            <ul id="modal-outlinks" class="space-y-1 text-xs text-blue-800"></ul>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex justify-end pt-2">
+        <button onclick="closeWebpageModal()" class="bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold px-5 py-2.5 rounded-xl">
+          Close Preview
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================= -->
+  <!-- MODAL: EDIT WEBPAGE METADATA                              -->
+  <!-- ========================================================= -->
+  <div id="edit-modal" class="fixed inset-0 z-50 hidden bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-xl w-full shadow-2xl border border-slate-200 p-6 space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <h3 class="text-lg font-extrabold text-slate-900">Edit Indexed Webpage</h3>
+        <button onclick="closeEditModal()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-full w-8 h-8 flex items-center justify-center font-bold">✕</button>
+      </div>
+      <form onsubmit="handleSaveWebpageEdit(event)" class="space-y-3 text-xs">
+        <input type="hidden" id="edit-page-id" />
+        <div>
+          <label class="font-bold text-slate-700 block mb-1">Page Title</label>
+          <input id="edit-page-title" required class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2" />
+        </div>
+        <div>
+          <label class="font-bold text-slate-700 block mb-1">Meta Description</label>
+          <input id="edit-page-desc" required class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2" />
+        </div>
+        <div>
+          <label class="font-bold text-slate-700 block mb-1">Keywords</label>
+          <input id="edit-page-keywords" required class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2" />
+        </div>
+        <div>
+          <label class="font-bold text-slate-700 block mb-1">Main Content</label>
+          <textarea id="edit-page-content" rows="4" required class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2"></textarea>
+        </div>
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button" onclick="closeEditModal()" class="px-4 py-2 rounded-xl bg-slate-100 text-slate-700 font-semibold">Cancel</button>
+          <button type="submit" class="px-4 py-2 rounded-xl bg-blue-600 text-white font-semibold">Save &amp; Re-Index</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="bg-white border-t border-slate-200 py-5 mt-12">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500">
+      <div>
+        <strong>MiniGoogle Search Engine Lab</strong> — Demonstrating Traditional TF-IDF Keyword Ranking vs. Larry Page &amp; Sergey Brin’s 1998 PageRank.
+      </div>
+      <div>
+        Simulated Educational Dataset • All calculations run live in real time.
+      </div>
+    </div>
+  </footer>
+
+  <!-- ========================================================= -->
+  <!-- JAVASCRIPT ENGINE: DATABASE, TF-IDF, PAGERANK, D3, CHARTS -->
+  <!-- ========================================================= -->
+  <script>
+    // =========================================================================
+    // 1. DOMAIN PALETTE & INITIAL DEMONSTRATION DATASET (6 DOMAINS x 5 PAGES)
+    // =========================================================================
+    const DOMAIN_COLORS = {
+      'pune-food-guide.com': '#4285F4',      // Google Blue
+      'best-pizza-pune.com': '#EA4335',      // Google Red
+      'college-canteen-blog.com': '#FBBC05', // Google Yellow/Amber
+      'pizza-recipes-home.com': '#34A853',   // Google Green
+      'cheap-eats-pune.com': '#8B5CF6',      // Violet
+      'pizza-pizza-pizza.com': '#EC4899'     // Pink
+    };
+
+    const SAMPLE_QUERIES = [
+      'Best pizza in Pune',
+      'Cheap food near college',
+      'Pizza recipes',
+      'Best restaurants in Pune',
+      'College canteen food',
+      'Popular pizza websites'
+    ];
+
+    const STOP_WORDS = new Set([
+      'a', 'an', 'the', 'in', 'on', 'at', 'for', 'to', 'of', 'and', 'or', 'is', 'are', 'was', 'were', 'with', 'by', 'from', 'as', 'that', 'this', 'it'
+    ]);
+
+    // Primary 6 hub pages correspond to nodes 1..6 for the canonical link pattern:
+    // page1->2, page2->1,3, page3->2,4, page4->2,5, page5->2, page6->1
+    function getDefaultDataset() {
+      const pages = [
+        // --- DOMAIN 1: pune-food-guide.com (Node 1 = p1) ---
+        {
+          id: 'p1',
+          domain: 'pune-food-guide.com',
+          url: 'https://pune-food-guide.com/',
+          title: 'Pune Food Guide — Top Restaurants, Cafes & Culinary Trails in Pune',
+          description: 'The ultimate editorial guide to the best restaurants in Pune, Koregaon Park dining, FC Road street food, and artisanal pizza parlors.',
+          keywords: 'pune food guide, best restaurants in pune, pune dining, koregaon park food, fc road restaurants, pizza pune',
+          content: 'Welcome to Pune Food Guide, Pune’s most trusted culinary directory. Whether you are hunting for the best restaurants in Pune, wood-fired Neapolitan pizza in Koregaon Park, or legendary Maharashtrian thalis on FC Road, our editors review every kitchen independently.'
+        },
+        {
+          id: 'p7',
+          domain: 'pune-food-guide.com',
+          url: 'https://pune-food-guide.com/best-restaurants-koregaon-park',
+          title: '15 Best Restaurants in Pune for Weekend Dining (2026 Edition)',
+          description: 'Curated list of top-rated fine dining and casual restaurants in Pune across Koregaon Park, Viman Nagar, and Baner.',
+          keywords: 'best restaurants in pune, koregaon park restaurants, viman nagar dining, baner cafes, pune food',
+          content: 'Finding the best restaurants in Pune is a delicious adventure. From rooftop Italian trattorias serving sourdough pizza to heritage Irani cafes in Camp, Pune offers extraordinary variety for families and food lovers.'
+        },
+        {
+          id: 'p8',
+          domain: 'pune-food-guide.com',
+          url: 'https://pune-food-guide.com/pune-pizza-awards',
+          title: 'Annual Pune Pizza Awards: Where to Find Authentic Wood-Fired Slices',
+          description: 'Our culinary critics blind-tasted 25 pizzerias to crown the top pizza restaurants in Pune.',
+          keywords: 'pizza awards pune, best pizza in pune, wood fired pizza, italian restaurants pune',
+          content: 'Pune’s artisanal pizza scene has exploded. Crispy blistered crusts, San Marzano tomatoes, and fresh buffalo mozzarella define the winners of our annual Pune pizza awards.'
+        },
+        {
+          id: 'p9',
+          domain: 'pune-food-guide.com',
+          url: 'https://pune-food-guide.com/fc-road-street-food-walk',
+          title: 'FC Road & JM Road Street Food Walk in Pune',
+          description: 'Explore iconic Pune street food stops near Fergusson College, from vada pav to cold coffee and loaded cheese pizza.',
+          keywords: 'fc road food, pune street food, jm road snacks, college food pune',
+          content: 'Fergusson College Road is the beating heart of Pune student food culture. Stroll past bustling snack stalls offering spicy misal, thick cold coffee, and budget pocket pizzas.'
+        },
+        {
+          id: 'p10',
+          domain: 'pune-food-guide.com',
+          url: 'https://pune-food-guide.com/viman-nagar-cafe-crawl',
+          title: 'Viman Nagar & Kalyani Nagar Cafe Crawl Guide',
+          description: 'Cozy study cafes, artisan bakeries, and late-night pizza delivery spots in East Pune.',
+          keywords: 'viman nagar cafes, kalyani nagar food, pune restaurants, late night pizza pune',
+          content: 'Viman Nagar buzzes with students and tech professionals looking for great coffee, wood-fired pizza, and relaxed outdoor seating in Pune.'
+        },
+
+        // --- DOMAIN 2: best-pizza-pune.com (Node 2 = p2) ---
+        {
+          id: 'p2',
+          domain: 'best-pizza-pune.com',
+          url: 'https://best-pizza-pune.com/',
+          title: 'Best Pizza in Pune — Verified Reviews of Top Pizzerias & Wood-Fired Ovens',
+          description: 'Discover the best pizza in Pune! Detailed crust ratings, menu prices, and sourdough pizzeria rankings in Koregaon Park, Baner & Aundh.',
+          keywords: 'best pizza in pune, pune pizzerias, wood fired pizza pune, sourdough pizza, popular pizza websites',
+          content: 'Looking for the best pizza in Pune? Best-Pizza-Pune.com tests every pizzeria across Pune for dough fermentation, cheese quality, sauce acidity, and oven char. Rated Pune’s #1 authority for authentic Italian and New York style pizza.'
+        },
+        {
+          id: 'p11',
+          domain: 'best-pizza-pune.com',
+          url: 'https://best-pizza-pune.com/top-10-pizzerias-pune',
+          title: 'Top 10 Best Pizza Places in Pune Ranked by Crust & Cheese Quality',
+          description: 'From authentic Neapolitan Margherita to spicy peri-peri paneer pizza, explore the 10 best pizza spots in Pune.',
+          keywords: 'best pizza in pune, top 10 pizza pune, neapolitan pizza pune, margherita pizza',
+          content: 'Our definitive top 10 ranking of the best pizza in Pune features 48-hour fermented sourdough bases, imported Italian flour, and bubbling mozzarella baked at 450 degrees Celsius.'
+        },
+        {
+          id: 'p12',
+          domain: 'best-pizza-pune.com',
+          url: 'https://best-pizza-pune.com/baner-aundh-pizza-guide',
+          title: 'Best Pizza in Baner, Balewadi & Aundh — West Pune Pizzeria Map',
+          description: 'Where to order crispy thin-crust and deep-dish pizza in Baner and Aundh, Pune.',
+          keywords: 'pizza in baner, pizza in aundh, best pizza in pune, thin crust pizza',
+          content: 'West Pune residents no longer need to cross town for artisan pies. Baner High Street and Aundh boast exceptional wood-fired pizzerias and gourmet delivery kitchens.'
+        },
+        {
+          id: 'p13',
+          domain: 'best-pizza-pune.com',
+          url: 'https://best-pizza-pune.com/late-night-pizza-delivery-pune',
+          title: 'Late-Night Pizza Delivery in Pune Open Till 2 AM',
+          description: 'Craving midnight cheese burst or pepperoni pizza in Pune? Check our verified late-night delivery list.',
+          keywords: 'late night pizza pune, midnight food delivery pune, best pizza in pune',
+          content: 'Whether you are pulling an all-nighter for exams or hosting friends, these Pune pizzerias deliver piping hot slices across Viman Nagar, Kothrud, and Wakad past midnight.'
+        },
+        {
+          id: 'p14',
+          domain: 'best-pizza-pune.com',
+          url: 'https://best-pizza-pune.com/sourdough-vs-neapolitan-pune',
+          title: 'Sourdough vs. Neapolitan Pizza: Pune Chefs Explain the Difference',
+          description: 'Learn how Pune’s top pizzaiolos ferment dough for lighter, crispier, digestible pizza crusts.',
+          keywords: 'sourdough pizza pune, neapolitan pizza, pizza crust guide, best pizza in pune',
+          content: 'Why do Pune’s top pizzerias obsess over wild yeast starters? Long cold fermentation unlocks complex flavor and airy cornicione rims.'
+        },
+
+        // --- DOMAIN 3: college-canteen-blog.com (Node 3 = p3) ---
+        {
+          id: 'p3',
+          domain: 'college-canteen-blog.com',
+          url: 'https://college-canteen-blog.com/',
+          title: 'College Canteen Blog — Honest Reviews of Campus Food & Student Hangouts',
+          description: 'Written by Pune university students: reviews of college canteen food, budget lunches, and cheap food near college campuses.',
+          keywords: 'college canteen food, cheap food near college, student budget meals, campus canteen blog, pune colleges',
+          content: 'Welcome to the College Canteen Blog! We review daily thalis, masala Maggi, grilled sandwiches, mini pizzas, and cold coffee served inside college canteens across Pune.'
+        },
+        {
+          id: 'p15',
+          domain: 'college-canteen-blog.com',
+          url: 'https://college-canteen-blog.com/top-college-canteens-pune',
+          title: '5 Iconic College Canteen Food Menus in Pune Ranked by Students',
+          description: 'From Fergusson College to COEP and Symbiosis, discover which campus serves the best college canteen food.',
+          keywords: 'college canteen food, coep canteen, fergusson college canteen, symbiosis food, cheap food near college',
+          content: 'Nothing beats piping hot college canteen food between lectures. Students voted on taste, hygiene, portion size, and pocket-friendly prices across Pune campuses.'
+        },
+        {
+          id: 'p16',
+          domain: 'college-canteen-blog.com',
+          url: 'https://college-canteen-blog.com/canteen-mini-pizza-review',
+          title: 'Can a ₹70 College Canteen Mini Pizza Compete with Real Pizzerias?',
+          description: 'We tested campus canteen mini pizzas against Pune’s top pizza joints to see if budget student slices hold up.',
+          keywords: 'college canteen food, cheap pizza, student snacks, canteen pizza',
+          content: 'Every college canteen in Pune serves a nostalgic desi-style baked mini pizza topped with capsicum, onion, sweet corn, and generous melted cheese.'
+        },
+        {
+          id: 'p17',
+          domain: 'college-canteen-blog.com',
+          url: 'https://college-canteen-blog.com/late-lecture-snacks-under-50',
+          title: 'Best College Canteen Snacks Under ₹50 for Broke Students',
+          description: 'Stretch your weekly pocket money with filling college canteen food options under fifty rupees.',
+          keywords: 'college canteen food, cheap food near college, snacks under 50, student budget food',
+          content: 'Poha, sabudana khichdi, bun maska, and egg bhurji remain undefeated champions of affordable college canteen food when your monthly allowance runs low.'
+        },
+        {
+          id: 'p18',
+          domain: 'college-canteen-blog.com',
+          url: 'https://college-canteen-blog.com/hostel-midnight-maggi-hacks',
+          title: 'Hostel Kitchen & Canteen Hacks: Upgrading Late-Night Student Meals',
+          description: 'Creative ways students transform simple college canteen food and hostel staples into gourmet comfort meals.',
+          keywords: 'hostel food, college canteen food, student cooking, budget snacks',
+          content: 'When the main college canteen closes at 8 PM, students turn to toasted bread-pizza and spiced noodles to survive exam week.'
+        },
+
+        // --- DOMAIN 4: pizza-recipes-home.com (Node 4 = p4) ---
+        {
+          id: 'p4',
+          domain: 'pizza-recipes-home.com',
+          url: 'https://pizza-recipes-home.com/',
+          title: 'Pizza Recipes Home — Step-by-Step Homemade Pizza Dough, Sauce & Baking Guides',
+          description: 'Master homemade pizza recipes in your kitchen! Easy 24-hour pizza dough, no-cook tomato sauce, and home oven baking secrets.',
+          keywords: 'pizza recipes, homemade pizza dough, pizza sauce recipe, bake pizza at home, popular pizza websites',
+          content: 'Pizza Recipes Home teaches home cooks how to craft pizzeria-quality pies without a commercial brick oven. Browse tested pizza recipes for Margherita, cast-iron pan pizza, and whole-wheat crusts.'
+        },
+        {
+          id: 'p19',
+          domain: 'pizza-recipes-home.com',
+          url: 'https://pizza-recipes-home.com/classic-margherita-recipe',
+          title: 'Classic Margherita Pizza Recipe with 24-Hour Cold-Fermented Dough',
+          description: 'Detailed homemade pizza recipe with baker’s percentages, fresh basil, mozzarella, and crushed plum tomatoes.',
+          keywords: 'pizza recipes, margherita pizza recipe, homemade pizza dough, italian pizza recipe',
+          content: 'Great pizza recipes start with four simple ingredients: high-protein flour, water, sea salt, and yeast. Follow our step-by-step folding guide for an airy, crisp crust at home.'
+        },
+        {
+          id: 'p20',
+          domain: 'pizza-recipes-home.com',
+          url: 'https://pizza-recipes-home.com/tawa-no-oven-pizza-recipe',
+          title: '30-Minute Skillet & Tawa Pizza Recipe (No Oven Required!)',
+          description: 'Quick homemade pizza recipe for students and apartments without an oven using a cast-iron pan.',
+          keywords: 'pizza recipes, no oven pizza recipe, tawa pizza, quick homemade pizza, cheap pizza',
+          content: 'No oven in your student flat? This 30-minute skillet pizza recipe delivers a golden crisp bottom and bubbling mozzarella cheese right on your stovetop.'
+        },
+        {
+          id: 'p21',
+          domain: 'pizza-recipes-home.com',
+          url: 'https://pizza-recipes-home.com/authentic-pizza-sauce-recipe',
+          title: '5-Minute No-Cook San Marzano Pizza Sauce Recipe',
+          description: 'Why professional pizzaiolos never cook their tomato sauce before baking—and how you can make it at home.',
+          keywords: 'pizza sauce recipe, pizza recipes, homemade tomato sauce, pizza toppings',
+          content: 'Cooking tomato sauce twice dulls its bright flavor. Crush ripe plum tomatoes with olive oil, garlic, oregano, and sea salt for authentic pizzeria taste.'
+        },
+        {
+          id: 'p22',
+          domain: 'pizza-recipes-home.com',
+          url: 'https://pizza-recipes-home.com/paneer-tikka-fusion-pizza',
+          title: 'Tandoori Paneer Tikka Pizza Recipe — Indian Fusion Favorite',
+          description: 'Combine smoky marinated paneer, mint chutney drizzle, and mozzarella in this crowd-pleasing homemade pizza recipe.',
+          keywords: 'paneer pizza recipe, pizza recipes, indian fusion pizza, vegetarian pizza',
+          content: 'One of the most requested pizza recipes in Pune kitchens: spiced yogurt-marinated paneer cubes roasted over crisp flatbread with pickled onions.'
+        },
+
+        // --- DOMAIN 5: cheap-eats-pune.com (Node 5 = p5) ---
+        {
+          id: 'p5',
+          domain: 'cheap-eats-pune.com',
+          url: 'https://cheap-eats-pune.com/',
+          title: 'Cheap Eats Pune — Best Budget Meals & Cheap Food Near College Campuses',
+          description: 'Find delicious cheap food near college in Pune! Complete directory of thalis, rolls, street snacks, and budget pizza deals under ₹150.',
+          keywords: 'cheap eats pune, cheap food near college, budget restaurants pune, student food pune, affordable meals',
+          content: 'Eating great food in Pune does not require a big budget. Cheap Eats Pune maps the best cheap food near college hubs in Kothrud, Viman Nagar, Shivajinagar, and Karve Nagar.'
+        },
+        {
+          id: 'p23',
+          domain: 'cheap-eats-pune.com',
+          url: 'https://cheap-eats-pune.com/cheap-food-near-college-kothrud',
+          title: 'Top 12 Cheap Food Near College Spots in Kothrud & Karve Nagar',
+          description: 'Where MIT and Cummins students eat daily: unlimited thalis, Frankie rolls, and cheap food near college under ₹100.',
+          keywords: 'cheap food near college, kothrud food, karve nagar cheap eats, student meals pune',
+          content: 'Kothrud and Karve Nagar are packed with unbeatable cheap food near college gates, offering hearty poha breakfasts, spicy pav bhaji, and combo lunches.'
+        },
+        {
+          id: 'p24',
+          domain: 'cheap-eats-pune.com',
+          url: 'https://cheap-eats-pune.com/budget-pizza-combos-pune',
+          title: 'Affordable Pizza Combos in Pune Under ₹199 for Students',
+          description: 'Craving pizza on a student budget? Here are the best buy-one-get-one and budget pizza deals in Pune.',
+          keywords: 'cheap pizza pune, budget pizza combos, cheap eats pune, student pizza deals',
+          content: 'You don’t need to spend a fortune for cheesy slices. Several local pizzerias near Pune colleges run weekday student combos under ₹199.'
+        },
+        {
+          id: 'p25',
+          domain: 'cheap-eats-pune.com',
+          url: 'https://cheap-eats-pune.com/unlimited-thali-under-120',
+          title: 'Best Unlimited Maharashtrian & Gujarati Thalis in Pune Under ₹120',
+          description: 'Wholesome, filling budget thali restaurants near Sadashiv Peth and Deccan Gymkhana.',
+          keywords: 'cheap eats pune, unlimited thali pune, budget lunch pune, cheap food near college',
+          content: 'For hungry students seeking nutritious cheap food near college, Sadashiv Peth’s historic dining halls serve unlimited rotis, sabzi, dal, and rice at student rates.'
+        },
+        {
+          id: 'p26',
+          domain: 'cheap-eats-pune.com',
+          url: 'https://cheap-eats-pune.com/viman-nagar-student-street-food',
+          title: 'Cheap Food Near Symbiosis Viman Nagar: Momos, Rolls & Slice Joints',
+          description: 'Evening street food guide around Viman Nagar college lanes with prices starting at ₹40.',
+          keywords: 'cheap food near college, viman nagar street food, symbiosis food, cheap eats pune',
+          content: 'Every evening at 6 PM, Viman Nagar’s student lanes transform into an open-air food festival of momos, shawarma, and budget wood-fired pizza slices.'
+        },
+
+        // --- DOMAIN 6: pizza-pizza-pizza.com (Node 6 = p6) ---
+        {
+          id: 'p6',
+          domain: 'pizza-pizza-pizza.com',
+          url: 'https://pizza-pizza-pizza.com/',
+          title: 'Pizza Pizza Pizza! Best Pizza Pizza Websites & Pizza Pizza Pizza Directory',
+          description: 'Pizza pizza pizza! Your #1 pizza pizza portal for pizza lovers, pizza websites, pizza deals, pizza slices, and pizza news.',
+          keywords: 'pizza, pizza pizza, popular pizza websites, pizza pizza pizza, best pizza, pizza delivery',
+          content: 'Pizza pizza pizza! Welcome to Pizza-Pizza-Pizza.com, the loudest pizza website on the internet! Pizza lovers love pizza, pizza cheese, pizza crust, pizza toppings, and popular pizza websites. Everything here is pizza pizza pizza!'
+        },
+        {
+          id: 'p27',
+          domain: 'pizza-pizza-pizza.com',
+          url: 'https://pizza-pizza-pizza.com/popular-pizza-websites-list',
+          title: 'Directory of Popular Pizza Websites, Pizza Blogs & Pizza Forums',
+          description: 'A mega-list of popular pizza websites, pizza fan clubs, and pizza ordering portals worldwide.',
+          keywords: 'popular pizza websites, pizza blogs, pizza websites, pizza directory, pizza pizza',
+          content: 'Looking for popular pizza websites? Browse our massive directory of pizza websites, pizza review blogs, pizza recipe portals, and pizza delivery chains.'
+        },
+        {
+          id: 'p28',
+          domain: 'pizza-pizza-pizza.com',
+          url: 'https://pizza-pizza-pizza.com/pizza-trivia-world-records',
+          title: '100 Crazy Pizza Facts & World’s Largest Pizza Records',
+          description: 'Fun pizza trivia, pizza history, and record-breaking giant pizzas from around the globe.',
+          keywords: 'pizza facts, pizza trivia, pizza history, pizza pizza',
+          content: 'Did you know over 3 billion pizzas are sold each year? Celebrate pizza culture with crazy pizza trivia and pizza world records.'
+        },
+        {
+          id: 'p29',
+          domain: 'pizza-pizza-pizza.com',
+          url: 'https://pizza-pizza-pizza.com/pizza-memes-and-wallpapers',
+          title: 'Funny Pizza Memes, Pizza GIFs & Cheesy Pizza Wallpapers',
+          description: 'Download high-resolution pepperoni pizza wallpapers and share hilarious pizza memes with fellow pizza addicts.',
+          keywords: 'pizza memes, pizza wallpapers, funny pizza, pizza lovers',
+          content: 'Nothing says true love like extra cheese pizza! Share our viral pizza memes and download HD pizza wallpapers.'
+        },
+        {
+          id: 'p30',
+          domain: 'pizza-pizza-pizza.com',
+          url: 'https://pizza-pizza-pizza.com/rate-my-pizza-slice',
+          title: 'Rate My Pizza Slice — Upload Photos of Your Pizza!',
+          description: 'Community gallery where users upload pizza photos and rate each other’s pizza slices.',
+          keywords: 'rate pizza, pizza photos, pizza community, popular pizza websites',
+          content: 'Upload your pepperoni, Margherita, or pineapple pizza slice and let the internet rate your pizza!'
+        }
+      ];
+
+      // Directed Hyperlinks:
+      // Includes the exact canonical 6-node backbone:
+      // p1->p2, p2->p1,p3, p3->p2,p4, p4->p2,p5, p5->p2, p6->p1
+      // Plus realistic cross-domain and intra-domain links across the 30 pages.
+      const links = [
+        // Canonical 6-node backbone (1->2, 2->1,3, 3->2,4, 4->2,5, 5->2, 6->1)
+        { source: 'p1', target: 'p2' },
+        { source: 'p2', target: 'p1' },
+        { source: 'p2', target: 'p3' },
+        { source: 'p3', target: 'p2' },
+        { source: 'p3', target: 'p4' },
+        { source: 'p4', target: 'p2' },
+        { source: 'p4', target: 'p5' },
+        { source: 'p5', target: 'p2' },
+        { source: 'p6', target: 'p1' },
+
+        // Cross-domain realistic editorial citations (making p2 & p1 high-authority hubs)
+        { source: 'p6', target: 'p2' },
+        { source: 'p5', target: 'p1' },
+        { source: 'p3', target: 'p5' },
+        { source: 'p4', target: 'p6' },
+        { source: 'p7', target: 'p1' },
+        { source: 'p7', target: 'p2' },
+        { source: 'p8', target: 'p2' },
+        { source: 'p8', target: 'p11' },
+        { source: 'p9', target: 'p1' },
+        { source: 'p9', target: 'p5' },
+        { source: 'p10', target: 'p7' },
+        { source: 'p10', target: 'p12' },
+
+        // best-pizza-pune.com internal & outbound
+        { source: 'p11', target: 'p2' },
+        { source: 'p11', target: 'p8' },
+        { source: 'p12', target: 'p2' },
+        { source: 'p12', target: 'p1' },
+        { source: 'p13', target: 'p2' },
+        { source: 'p14', target: 'p2' },
+        { source: 'p14', target: 'p19' },
+
+        // college-canteen-blog.com internal & outbound
+        { source: 'p15', target: 'p3' },
+        { source: 'p15', target: 'p23' },
+        { source: 'p16', target: 'p2' },
+        { source: 'p16', target: 'p3' },
+        { source: 'p17', target: 'p5' },
+        { source: 'p18', target: 'p20' },
+
+        // pizza-recipes-home.com internal & outbound
+        { source: 'p19', target: 'p4' },
+        { source: 'p19', target: 'p21' },
+        { source: 'p20', target: 'p4' },
+        { source: 'p20', target: 'p3' },
+        { source: 'p21', target: 'p4' },
+        { source: 'p22', target: 'p4' },
+        { source: 'p22', target: 'p2' },
+
+        // cheap-eats-pune.com internal & outbound
+        { source: 'p23', target: 'p5' },
+        { source: 'p23', target: 'p15' },
+        { source: 'p24', target: 'p2' },
+        { source: 'p24', target: 'p5' },
+        { source: 'p25', target: 'p1' },
+        { source: 'p26', target: 'p5' },
+        { source: 'p26', target: 'p10' },
+
+        // pizza-pizza-pizza.com (keyword-heavy spammy site with low authority!)
+        { source: 'p27', target: 'p2' },
+        { source: 'p27', target: 'p4' },
+        { source: 'p28', target: 'p6' },
+        { source: 'p29', target: 'p6' },
+        { source: 'p30', target: 'p6' }
+      ];
+
+      return { pages, links };
+    }
+
+    // =========================================================================
+    // 2. APPLICATION STATE & PERSISTENCE
+    // =========================================================================
+    const STORAGE_KEY = 'minigoogle_v1_state';
+
+    let state = {
+      pages: [],
+      links: [],
+      damping: 0.85,
+      keywordWeight: 0.70,
+      pagerankWeight: 0.30,
+      selectedAlgo: 'old', // 'old' | 'pagerank' | 'combined'
+      currentQuery: 'Best pizza in Pune',
+      searchHistory: ['Best pizza in Pune', 'Cheap food near college', 'Pizza recipes'],
+      prScores: {},          // Map<pageId, normalizedPR>
+      prHistory: [],         // Array of iteration snapshots for step-by-step inspector
+      prIterations: 0,
+      graphMode: 'full',     // 'full' | 'canonical'
+      selectedNodeId: 'p2',
+      canonicalResult: null
+    };
+
+    let comparisonChartInstance = null;
+    let prDistChartInstance = null;
+
+    function loadState() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && Array.isArray(parsed.pages) && parsed.pages.length > 0) {
+            state.pages = parsed.pages;
+            state.links = parsed.links || [];
+            state.damping = typeof parsed.damping === 'number' ? parsed.damping : 0.85;
+            state.keywordWeight = typeof parsed.keywordWeight === 'number' ? parsed.keywordWeight : 0.70;
+            state.pagerankWeight = typeof parsed.pagerankWeight === 'number' ? parsed.pagerankWeight : 0.30;
+            state.searchHistory = Array.isArray(parsed.searchHistory) ? parsed.searchHistory : state.searchHistory;
+            return;
+          }
+        }
+      } catch (e) {
+        console.warn('Could not load saved state, using defaults.', e);
+      }
+      const def = getDefaultDataset();
+      state.pages = def.pages;
+      state.links = def.links;
+    }
+
+    function saveState() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({
+          pages: state.pages,
+          links: state.links,
+          damping: state.damping,
+          keywordWeight: state.keywordWeight,
+          pagerankWeight: state.pagerankWeight,
+          searchHistory: state.searchHistory
+        }));
+      } catch (e) {
+        console.warn('Storage quota warning:', e);
+      }
+    }
+
+    // =========================================================================
+    // 3. ALGORITHM 2: GOOGLE'S PAGERANK (1998 ITERATIVE POWER METHOD)
+    // =========================================================================
+    /**
+     * Computes exact iterative PageRank on any directed graph (nodeIds, edges)
+     * Formula: PR(A) = (1 - d) / N + d * SUM( PR(Ti) / C(Ti) ) + d * (DanglingPR / N)
+     * Ensures normalized sum of PR = 1.0 at every step.
+     */
+    function runIterativePageRank(nodeIds, edges, d = 0.85, tol = 1e-6, maxIter = 100) {
+      const N = nodeIds.length;
+      if (N === 0) return { scores: {}, history: [], iterations: 0 };
+
+      // Build adjacency maps
+      const outEdges = {};
+      const inEdges = {};
+      nodeIds.forEach(id => {
+        outEdges[id] = new Set();
+        inEdges[id] = new Set();
+      });
+
+      edges.forEach(({ source, target }) => {
+        if (outEdges[source] && outEdges[target] && source !== target) {
+          outEdges[source].add(target);
+          inEdges[target].add(source);
+        }
+      });
+
+      // Iteration 0: Equal initial PageRank = 1 / N
+      let pr = {};
+      nodeIds.forEach(id => { pr[id] = 1.0 / N; });
+
+      const history = [{ iter: 0, scores: { ...pr }, delta: 1.0 }];
+      let iter = 0;
+
+      for (iter = 1; iter <= maxIter; iter++) {
+        const nextPr = {};
+
+        // Sum PageRank of dangling nodes (nodes with 0 outgoing links)
+        let danglingSum = 0;
+        nodeIds.forEach(id => {
+          if (outEdges[id].size === 0) {
+            danglingSum += pr[id];
+          }
+        });
+
+        let maxDiff = 0;
+        const teleportBase = (1.0 - d) / N;
+        const danglingShare = d * (danglingSum / N);
+
+        nodeIds.forEach(targetId => {
+          let linkSum = 0;
+          inEdges[targetId].forEach(sourceId => {
+            const cTi = outEdges[sourceId].size;
+            if (cTi > 0) {
+              linkSum += pr[sourceId] / cTi;
+            }
+          });
+          const val = teleportBase + danglingShare + d * linkSum;
+          nextPr[targetId] = val;
+          maxDiff = Math.max(maxDiff, Math.abs(val - pr[targetId]));
+        });
+
+        // Normalize so sum strictly equals 1.0
+        const total = Object.values(nextPr).reduce((a, b) => a + b, 0);
+        if (total > 0) {
+          nodeIds.forEach(id => { nextPr[id] = nextPr[id] / total; });
+        }
+
+        pr = nextPr;
+        history.push({ iter, scores: { ...pr }, delta: maxDiff });
+
+        if (maxDiff < tol) {
+          break;
+        }
+      }
+
+      return { scores: pr, history, iterations: iter };
+    }
+
+    function computeCanonicalSixNodeGraph() {
+      // Exact user-specified link structure:
+      // page1->2, page2->1,3, page3->2,4, page4->2,5, page5->2, page6->1
+      const nodes = ['page1', 'page2', 'page3', 'page4', 'page5', 'page6'];
+      const edges = [
+        { source: 'page1', target: 'page2' },
+        { source: 'page2', target: 'page1' },
+        { source: 'page2', target: 'page3' },
+        { source: 'page3', target: 'page2' },
+        { source: 'page3', target: 'page4' },
+        { source: 'page4', target: 'page2' },
+        { source: 'page4', target: 'page5' },
+        { source: 'page5', target: 'page2' },
+        { source: 'page6', target: 'page1' }
+      ];
+      return runIterativePageRank(nodes, edges, state.damping, 1e-6, 100);
+    }
+
+    function recalculatePageRank() {
+      const nodeIds = state.pages.map(p => p.id);
+      const res = runIterativePageRank(nodeIds, state.links, state.damping, 1e-6, 100);
+      state.prScores = res.scores;
+      state.prHistory = res.history;
+      state.prIterations = res.iterations;
+      state.canonicalResult = computeCanonicalSixNodeGraph();
+    }
+
+    // =========================================================================
+    // 4. ALGORITHM 1: TRADITIONAL KEYWORD-BASED RANKING (TF-IDF + FIELD WEIGHTS)
+    // =========================================================================
+    function tokenize(text) {
+      return (text || '')
+        .toLowerCase()
+        .replace(/[^a-z0-9\s]/g, ' ')
+        .split(/\s+/)
+        .filter(tok => tok.length > 1 && !STOP_WORDS.has(tok));
+    }
+
+    function computeKeywordScores(query, pages) {
+      const rawQuery = (query || '').trim().toLowerCase();
+      const queryTokens = Array.from(new Set(tokenize(rawQuery)));
+      const N = pages.length;
+
+      if (queryTokens.length === 0 || N === 0) {
+        return pages.map(p => ({
+          page: p,
+          matchedKeywords: [],
+          titleScore: 0,
+          descScore: 0,
+          keywordTagScore: 0,
+          contentTfIdfScore: 0,
+          phraseBonus: 0,
+          rawKeywordScore: 0
+        }));
+      }
+
+      // Compute Document Frequency (DF) for each query token across corpus
+      const docFreq = {};
+      queryTokens.forEach(tok => {
+        let count = 0;
+        pages.forEach(p => {
+          const combined = `${p.title} ${p.description} ${p.keywords} ${p.content}`.toLowerCase();
+          if (combined.includes(tok)) count++;
+        });
+        docFreq[tok] = count;
+      });
+
+      return pages.map(p => {
+        const titleLower = p.title.toLowerCase();
+        const descLower = p.description.toLowerCase();
+        const kwLower = p.keywords.toLowerCase();
+        const contentLower = p.content.toLowerCase();
+
+        const titleTokens = tokenize(titleLower);
+        const descTokens = tokenize(descLower);
+        const kwTokens = tokenize(kwLower);
+        const contentTokens = tokenize(contentLower);
+        const totalContentLen = Math.max(contentTokens.length, 1);
+
+        let titleScore = 0;
+        let descScore = 0;
+        let keywordTagScore = 0;
+        let contentTfIdfScore = 0;
+        const matchedKeywords = [];
+
+        queryTokens.forEach(tok => {
+          const df = docFreq[tok] || 1;
+          const idf = Math.log((N + 1) / (df + 0.5)) + 1.0;
+
+          const titleMatches = titleTokens.filter(t => t === tok).length;
+          const descMatches = descTokens.filter(t => t === tok).length;
+          const kwMatches = kwTokens.filter(t => t === tok).length;
+          const bodyMatches = contentTokens.filter(t => t === tok).length;
+
+          if (titleMatches + descMatches + kwMatches + bodyMatches > 0) {
+            matchedKeywords.push(tok);
+          }
+
+          // Transparent field weights (classic 1990s search engine heuristics)
+          titleScore += titleMatches * 3.2 * idf;
+          descScore += descMatches * 1.8 * idf;
+          keywordTagScore += kwMatches * 2.2 * idf;
+
+          // TF-IDF term frequency normalized by document length
+          const tf = bodyMatches / Math.sqrt(totalContentLen);
+          contentTfIdfScore += tf * 6.0 * idf;
+        });
+
+        // Exact query phrase match bonus
+        let phraseBonus = 0;
+        if (rawQuery.length >= 4) {
+          if (titleLower.includes(rawQuery)) phraseBonus += 5.0;
+          if (descLower.includes(rawQuery)) phraseBonus += 2.5;
+          if (contentLower.includes(rawQuery)) phraseBonus += 2.0;
+        }
+
+        // Coverage bonus if ALL query tokens appear in the page
+        const coverageRatio = matchedKeywords.length / queryTokens.length;
+        const coverageMultiplier = 0.6 + 0.4 * coverageRatio;
+
+        const rawKeywordScore = (titleScore + descScore + keywordTagScore + contentTfIdfScore + phraseBonus) * coverageMultiplier;
+
+        return {
+          page: p,
+          matchedKeywords,
+          titleScore: Number(titleScore.toFixed(2)),
+          descScore: Number(descScore.toFixed(2)),
+          keywordTagScore: Number(keywordTagScore.toFixed(2)),
+          contentTfIdfScore: Number(contentTfIdfScore.toFixed(2)),
+          phraseBonus: Number(phraseBonus.toFixed(2)),
+          rawKeywordScore: Number(rawKeywordScore.toFixed(3))
+        };
+      });
+    }
+
+    // =========================================================================
+    // 5. UNIFIED RANKING ENGINE (OLD vs PAGERANK vs COMBINED)
+    // =========================================================================
+    function evaluateAllAlgorithms(query, domainFilter = 'ALL', prScope = 'matched') {
+      const t0 = performance.now();
+
+      // Step 1: Compute Keyword Scores across all pages (for accurate corpus IDF)
+      const allKwResults = computeKeywordScores(query, state.pages);
+
+      // Normalization denominators across corpus
+      const maxKw = Math.max(...allKwResults.map(r => r.rawKeywordScore), 0.0001);
+      const maxPr = Math.max(...Object.values(state.prScores), 0.0001);
+
+      // Enrich every page with normalized scores + link counts
+      const enriched = allKwResults.map(item => {
+        const pid = item.page.id;
+        const prRaw = state.prScores[pid] || 0;
+        const normKw = (item.rawKeywordScore / maxKw) * 100;
+        const normPr = (prRaw / maxPr) * 100;
+        const combinedScore = (state.keywordWeight * normKw) + (state.pagerankWeight * normPr);
+
+        const inLinks = state.links.filter(l => l.target === pid).map(l => l.source);
+        const outLinks = state.links.filter(l => l.source === pid).map(l => l.target);
+
+        return {
+          ...item,
+          prRaw,
+          normKw: Number(normKw.toFixed(2)),
+          normPr: Number(normPr.toFixed(2)),
+          combinedScore: Number(combinedScore.toFixed(2)),
+          inLinks,
+          outLinks
+        };
+      });
+
+      // Apply Domain Filter if chosen
+      const domainFiltered = domainFilter === 'ALL'
+        ? enriched
+        : enriched.filter(r => r.page.domain === domainFilter);
+
+      // Pages matching at least 1 query keyword (or all if query is empty)
+      const hasQuery = tokenize(query).length > 0;
+      const queryMatched = hasQuery
+        ? domainFiltered.filter(r => r.rawKeywordScore > 0)
+        : domainFiltered;
+
+      // Ranking 1: Old Algorithm (Sorted by Keyword Relevance)
+      const oldRanked = [...queryMatched].sort((a, b) => b.rawKeywordScore - a.rawKeywordScore);
+
+      // Ranking 2: PageRank Algorithm
+      // Distinguish query-matched PageRank vs Pure Global PageRank
+      const prPool = (prScope === 'global') ? domainFiltered : queryMatched;
+      const prRanked = [...prPool].sort((a, b) => b.prRaw - a.prRaw);
+
+      // Ranking 3: Combined Algorithm
+      const combinedRanked = [...queryMatched].sort((a, b) => b.combinedScore - a.combinedScore);
+
+      const elapsedMs = Math.max(0.2, performance.now() - t0).toFixed(2);
+
+      return {
+        oldRanked,
+        prRanked,
+        combinedRanked,
+        elapsedMs
+      };
+    }
+
+    // =========================================================================
+    // 6. UI RENDERING: SEARCH HOMEPAGE & RESULTS
+    // =========================================================================
+    function initSearchUI() {
+      // Sample query chips
+      const sampleContainer = document.getElementById('sample-queries');
+      sampleContainer.innerHTML = SAMPLE_QUERIES.map(q => `
+        <button type="button" onclick="runSampleQuery('${q.replace(/'/g, "\\'")}')"
+          class="text-xs bg-slate-100 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-200 text-slate-700 border border-slate-200 px-3 py-1.5 rounded-full transition font-medium">
+          ${q}
+        </button>
+      `).join('');
+
+      populateDomainDropdowns();
+      updateAlgoButtonsUI();
+      renderSearchHistory();
+    }
+
+    function populateDomainDropdowns() {
+      const domains = Array.from(new Set(state.pages.map(p => p.domain)));
+      const filterSelect = document.getElementById('domain-filter');
+      const currentVal = filterSelect.value;
+      filterSelect.innerHTML = `<option value="ALL">All ${domains.length} Indexed Websites (${state.pages.length} pages)</option>` +
+        domains.map(d => `<option value="${d}">${d}</option>`).join('');
+      if (domains.includes(currentVal)) filterSelect.value = currentVal;
+
+      const datalist = document.getElementById('domain-datalist');
+      if (datalist) {
+        datalist.innerHTML = domains.map(d => `<option value="${d}">`).join('');
+      }
+
+      document.getElementById('hero-stats-badge').textContent =
+        `${domains.length} Domains • ${state.pages.length} Webpages • ${state.links.length} Hyperlinks`;
+    }
+
+    function runSampleQuery(q) {
+      document.getElementById('search-input').value = q;
+      state.currentQuery = q;
+      addToSearchHistory(q);
+      executeSearch();
+    }
+
+    function handleSearchSubmit(e) {
+      e.preventDefault();
+      const q = document.getElementById('search-input').value.trim();
+      state.currentQuery = q;
+      if (q) addToSearchHistory(q);
+      executeSearch();
+    }
+
+    function clearSearchInput() {
+      document.getElementById('search-input').value = '';
+      state.currentQuery = '';
+      executeSearch();
+    }
+
+    function addToSearchHistory(q) {
+      if (!q) return;
+      state.searchHistory = [q, ...state.searchHistory.filter(item => item.toLowerCase() !== q.toLowerCase())].slice(0, 6);
+      saveState();
+      renderSearchHistory();
+    }
+
+    function renderSearchHistory() {
+      const bar = document.getElementById('search-history-bar');
+      const chips = document.getElementById('search-history-chips');
+      if (!state.searchHistory.length) {
+        bar.classList.add('hidden');
+        return;
+      }
+      bar.classList.remove('hidden');
+      chips.innerHTML = state.searchHistory.map(h => `
+        <button type="button" onclick="runSampleQuery('${h.replace(/'/g, "\\'")}')"
+          class="text-[11px] bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 px-2.5 py-0.5 rounded-full transition">
+          🕒 ${escapeHtml(h)}
+        </button>
+      `).join('');
+    }
+
+    function setAlgorithm(algo) {
+      state.selectedAlgo = algo;
+      updateAlgoButtonsUI();
+      executeSearch();
+    }
+
+    function updateAlgoButtonsUI() {
+      document.querySelectorAll('.algo-btn').forEach(btn => {
+        const isSelected = btn.dataset.algo === state.selectedAlgo;
+        if (isSelected) {
+          btn.className = 'algo-btn px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-bold bg-white text-blue-700 shadow-sm border border-blue-200 transition';
+        } else {
+          btn.className = 'algo-btn px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-medium text-slate-600 hover:text-slate-900 transition';
+        }
+      });
+
+      const prModeBox = document.getElementById('pr-mode-box');
+      const prBanner = document.getElementById('pagerank-distinction-banner');
+      if (state.selectedAlgo === 'pagerank') {
+        prModeBox.classList.remove('hidden');
+        prModeBox.classList.add('flex');
+        prBanner.classList.remove('hidden');
+      } else {
+        prModeBox.classList.add('hidden');
+        prModeBox.classList.remove('flex');
+        prBanner.classList.add('hidden');
+      }
+
+      // Update Combined label with dynamic weights
+      const kwPct = Math.round(state.keywordWeight * 100);
+      const prPct = Math.round(state.pagerankWeight * 100);
+      const combBtn = document.querySelector('.algo-btn[data-algo="combined"]');
+      if (combBtn) {
+        combBtn.textContent = `C. Combined (${kwPct}% Keyword + ${prPct}% PR)`;
+      }
+    }
+
+    function executeSearch() {
+      const query = document.getElementById('search-input').value.trim();
+      state.currentQuery = query;
+      const domainFilter = document.getElementById('domain-filter').value;
+      const sortOverride = document.getElementById('sort-override').value;
+      const prScope = document.getElementById('pr-scope').value;
+
+      const { oldRanked, prRanked, combinedRanked, elapsedMs } = evaluateAllAlgorithms(query, domainFilter, prScope);
+
+      let activeList = [];
+      let algoLabel = '';
+      if (state.selectedAlgo === 'old') {
+        activeList = oldRanked;
+        algoLabel = 'Old Keyword Algorithm (TF-IDF)';
+      } else if (state.selectedAlgo === 'pagerank') {
+        activeList = prRanked;
+        algoLabel = prScope === 'global'
+          ? 'Pure Global PageRank (Query-Independent)'
+          : 'Google PageRank (Query-Filtered)';
+      } else {
+        activeList = combinedRanked;
+        algoLabel = `Combined (${Math.round(state.keywordWeight * 100)}% KW + ${Math.round(state.pagerankWeight * 100)}% PR)`;
+      }
+
+      // Optional user sort override
+      if (sortOverride === 'inlinks') {
+        activeList = [...activeList].sort((a, b) => b.inLinks.length - a.inLinks.length);
+      } else if (sortOverride === 'title') {
+        activeList = [...activeList].sort((a, b) => a.page.title.localeCompare(b.page.title));
+      }
+
+      // Update Stats Text
+      document.getElementById('search-stats-text').innerHTML = `
+        Found <strong>${activeList.length}</strong> results in <strong>${elapsedMs} ms</strong> using <span class="text-blue-700 font-semibold">${algoLabel}</span> • PageRank converged in <strong>${state.prIterations}</strong> iterations (d=${state.damping})
+      `;
+
+      const container = document.getElementById('search-results-container');
+
+      if (activeList.length === 0) {
+        container.innerHTML = `
+          <div class="bg-white rounded-3xl border border-slate-200 p-10 text-center space-y-3">
+            <div class="text-4xl">🔎</div>
+            <h3 class="text-lg font-bold text-slate-900">No matching webpages found for "${escapeHtml(query)}"</h3>
+            <p class="text-sm text-slate-500 max-w-md mx-auto">
+              Try searching for food, pizza, Pune, restaurants, college canteen, or recipes—or switch PageRank mode to <strong>Pure Global PageRank</strong> to see all authoritative pages.
+            </p>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = activeList.map((item, idx) => {
+        const rank = idx + 1;
+        const p = item.page;
+        const domainColor = DOMAIN_COLORS[p.domain] || '#475569';
+
+        // Determine primary score display badge based on active algorithm
+        let primaryScoreBadge = '';
+        if (state.selectedAlgo === 'old') {
+          primaryScoreBadge = `<span class="bg-slate-900 text-white font-mono text-xs font-bold px-3 py-1 rounded-xl">Keyword Score: ${item.rawKeywordScore.toFixed(2)} (${item.normKw}%)</span>`;
+        } else if (state.selectedAlgo === 'pagerank') {
+          primaryScoreBadge = `<span class="bg-emerald-700 text-white font-mono text-xs font-bold px-3 py-1 rounded-xl">PageRank: ${item.prRaw.toFixed(4)} (${(item.prRaw * 100).toFixed(1)}% share)</span>`;
+        } else {
+          primaryScoreBadge = `<span class="bg-blue-600 text-white font-mono text-xs font-bold px-3 py-1 rounded-xl">Combined Score: ${item.combinedScore.toFixed(1)} / 100</span>`;
+        }
+
+        const matchedPills = item.matchedKeywords.length > 0
+          ? item.matchedKeywords.map(k => `<span class="bg-amber-100 text-amber-900 border border-amber-200 px-2 py-0.5 rounded-md font-mono text-[11px] font-semibold">${escapeHtml(k)}</span>`).join(' ')
+          : `<span class="text-slate-400 italic text-[11px]">No direct query keyword match (ranked via link authority)</span>`;
+
+        return `
+          <article class="bg-white rounded-2xl border border-slate-200 hover:border-blue-300 p-5 shadow-sm transition space-y-3">
+            <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
+              <div class="flex items-start gap-3">
+                <div class="w-8 h-8 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center font-extrabold text-sm text-slate-800 shrink-0 mt-0.5">
+                  #${rank}
+                </div>
+                <div>
+                  <div class="flex flex-wrap items-center gap-2 text-xs mb-1">
+                    <span class="font-bold px-2 py-0.5 rounded-md text-white" style="background-color: ${domainColor}">${escapeHtml(p.domain)}</span>
+                    <span class="font-mono text-emerald-700 truncate max-w-xs sm:max-w-md">${escapeHtml(p.url)}</span>
+                  </div>
+                  <button type="button" onclick="openWebpageModal('${p.id}')" class="text-left text-lg sm:text-xl font-bold text-[#1a0dab] hover:underline leading-snug">
+                    ${highlightText(p.title, item.matchedKeywords)}
+                  </button>
+                </div>
+              </div>
+              <div class="shrink-0 flex flex-col sm:items-end gap-1">
+                ${primaryScoreBadge}
+                <span class="text-[11px] text-slate-500 font-medium">${algoLabel}</span>
+              </div>
+            </div>
+
+            <p class="text-sm text-slate-600 leading-relaxed pl-0 sm:pl-11">
+              ${highlightText(p.description, item.matchedKeywords)}
+            </p>
+
+            <!-- Transparent Mathematical Score Breakdown Strip -->
+            <div class="pl-0 sm:pl-11 pt-1 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 text-xs">
+              <div class="flex flex-wrap items-center gap-1.5">
+                <span class="text-slate-500 font-semibold">Matched:</span>
+                ${matchedPills}
+              </div>
+
+              <div class="flex flex-wrap items-center gap-2 font-mono text-[11px] text-slate-600 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200">
+                <span title="Title Match Score">Title: <strong>${item.titleScore}</strong></span>
+                <span>•</span>
+                <span title="Meta Description Score">Desc: <strong>${item.descScore}</strong></span>
+                <span>•</span>
+                <span title="Body TF-IDF Score">TF-IDF: <strong>${item.contentTfIdfScore}</strong></span>
+                <span>•</span>
+                <span title="Incoming / Outgoing Hyperlinks" class="text-emerald-700">InLinks: <strong>${item.inLinks.length}</strong> / Out: <strong>${item.outLinks.length}</strong></span>
+                <span>•</span>
+                <span title="Normalized PageRank" class="text-blue-700">PR: <strong>${item.prRaw.toFixed(4)}</strong></span>
+              </div>
+            </div>
+          </article>
+        `;
+      }).join('');
+    }
+
+    function highlightText(text, keywords) {
+      let safe = escapeHtml(text);
+      if (!keywords || keywords.length === 0) return safe;
+      keywords.forEach(kw => {
+        if (kw.length < 2) return;
+        const regex = new RegExp(`(${kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+        safe = safe.replace(regex, '<mark class="bg-amber-100 text-slate-900 rounded px-0.5 font-semibold">$1</mark>');
+      });
+      return safe;
+    }
+
+    // =========================================================================
+    // 7. SIDE-BY-SIDE COMPARISON DASHBOARD
+    // =========================================================================
+    function handleCompareSearch(e) {
+      e.preventDefault();
+      const q = document.getElementById('compare-query-input').value.trim();
+      state.currentQuery = q;
+      document.getElementById('search-input').value = q;
+      renderComparisonView();
+    }
+
+    function renderComparisonView() {
+      const q = state.currentQuery || 'Best pizza in Pune';
+      document.getElementById('compare-query-input').value = q;
+      document.getElementById('compare-combined-title').textContent =
+        `Combined (${Math.round(state.keywordWeight * 100)}% KW + ${Math.round(state.pagerankWeight * 100)}% PR)`;
+
+      const { oldRanked, prRanked, combinedRanked } = evaluateAllAlgorithms(q, 'ALL', 'matched');
+
+      // Map old rank positions to compute rank delta badges
+      const oldPosMap = {};
+      oldRanked.forEach((item, i) => { oldPosMap[item.page.id] = i + 1; });
+
+      const renderMiniList = (list, mode) => {
+        if (!list.length) {
+          return `<div class="text-xs text-slate-400 italic py-6 text-center">No matching pages for this query.</div>`;
+        }
+        return list.slice(0, 8).map((item, idx) => {
+          const rank = idx + 1;
+          const oldRank = oldPosMap[item.page.id] || rank;
+          const delta = oldRank - rank;
+          let deltaBadge = `<span class="text-[10px] font-mono text-slate-400">• 0</span>`;
+          if (mode !== 'old') {
+            if (delta > 0) deltaBadge = `<span class="text-[10px] font-mono font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">↑ +${delta}</span>`;
+            else if (delta < 0) deltaBadge = `<span class="text-[10px] font-mono font-bold text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded">↓ ${delta}</span>`;
+          }
+
+          let scoreLine = '';
+          if (mode === 'old') {
+            scoreLine = `KW Score: <strong>${item.rawKeywordScore.toFixed(2)}</strong> (${item.normKw}%)`;
+          } else if (mode === 'pr') {
+            scoreLine = `PageRank: <strong>${item.prRaw.toFixed(4)}</strong> • InLinks: <strong>${item.inLinks.length}</strong>`;
+          } else {
+            scoreLine = `Final: <strong>${item.combinedScore.toFixed(1)}</strong> (KW ${item.normKw}% | PR ${item.normPr}%)`;
+          }
+
+          return `
+            <div class="p-3 rounded-xl border border-slate-200 bg-slate-50/70 hover:bg-white transition space-y-1">
+              <div class="flex items-center justify-between gap-2">
+                <span class="text-xs font-extrabold text-slate-800">#${rank} ${escapeHtml(item.page.domain)}</span>
+                ${deltaBadge}
+              </div>
+              <button type="button" onclick="openWebpageModal('${item.page.id}')" class="text-left text-xs font-bold text-blue-700 hover:underline line-clamp-1">
+                ${escapeHtml(item.page.title)}
+              </button>
+              <div class="text-[11px] font-mono text-slate-600">${scoreLine}</div>
+            </div>
+          `;
+        }).join('');
+      };
+
+      document.getElementById('compare-col-old').innerHTML = renderMiniList(oldRanked, 'old');
+      document.getElementById('compare-col-pr').innerHTML = renderMiniList(prRanked, 'pr');
+      document.getElementById('compare-col-combined').innerHTML = renderMiniList(combinedRanked, 'combined');
+
+      // Generate natural-language explanation of ranking differences
+      const expBox = document.getElementById('comparison-explanation-box');
+      if (oldRanked.length > 0 && prRanked.length > 0) {
+        const topOld = oldRanked[0];
+        const topPr = prRanked[0];
+        const topComb = combinedRanked[0];
+        if (topOld.page.id !== topPr.page.id) {
+          expBox.innerHTML = `
+            <strong>Why do the rankings differ for "${escapeHtml(q)}"?</strong><br/>
+            • <strong>Old Keyword Algorithm</strong> ranks <em>"${escapeHtml(topOld.page.title)}"</em> (#1) because of high keyword density (Score: ${topOld.rawKeywordScore.toFixed(2)}), even though it only has <strong>${topOld.inLinks.length} incoming links</strong>.<br/>
+            • <strong>PageRank Algorithm</strong> elevates <em>"${escapeHtml(topPr.page.title)}"</em> (#1) because it receives <strong>${topPr.inLinks.length} authoritative incoming links</strong> (PR = ${topPr.prRaw.toFixed(4)}).<br/>
+            • <strong>Combined Algorithm</strong> selects <em>"${escapeHtml(topComb.page.title)}"</em> (#1, Final Score: ${topComb.combinedScore.toFixed(1)}) by balancing textual relevance and link trust!
+          `;
+        } else {
+          expBox.innerHTML = `
+            <strong>Consensus Winner for "${escapeHtml(q)}":</strong><br/>
+            <em>"${escapeHtml(topOld.page.title)}"</em> ranks #1 across both <strong>Old Keyword Search</strong> (Score: ${topOld.rawKeywordScore.toFixed(2)}) and <strong>PageRank</strong> (PR = ${topPr.prRaw.toFixed(4)}, ${topPr.inLinks.length} incoming links) because it is both topically relevant and heavily cited across domains.
+          `;
+        }
+      } else {
+        expBox.innerHTML = `Enter a query matching indexed food pages (e.g. <em>"Best pizza in Pune"</em> or <em>"Popular pizza websites"</em>) to see how PageRank demotes keyword-stuffed spam pages in favor of authoritative hubs.`;
+      }
+
+      // Render Chart.js Grouped Bar Chart
+      renderComparisonChart(combinedRanked.slice(0, 7));
+    }
+
+    function renderComparisonChart(items) {
+      const ctx = document.getElementById('comparison-chart');
+      if (!ctx) return;
+      if (comparisonChartInstance) {
+        comparisonChartInstance.destroy();
+      }
+
+      const labels = items.map(i => `${i.page.domain} (${i.page.id})`);
+      comparisonChartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [
+            {
+              label: 'Normalized Keyword Score (0-100)',
+              data: items.map(i => i.normKw),
+              backgroundColor: '#334155',
+              borderRadius: 6
+            },
+            {
+              label: 'Normalized PageRank Score (0-100)',
+              data: items.map(i => i.normPr),
+              backgroundColor: '#10b981',
+              borderRadius: 6
+            },
+            {
+              label: 'Combined Weighted Score (0-100)',
+              data: items.map(i => i.combinedScore),
+              backgroundColor: '#3b82f6',
+              borderRadius: 6
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            y: { beginAtZero: true, max: 105, title: { display: true, text: 'Normalized Score (0–100)' } }
+          },
+          plugins: {
+            legend: { position: 'top' }
+          }
+        }
+      });
+    }
+
+    // =========================================================================
+    // 8. INTERACTIVE D3.JS DIRECTED GRAPH & PAGERANK VISUALIZATION
+    // =========================================================================
+    function setGraphMode(mode) {
+      state.graphMode = mode;
+      const btnFull = document.getElementById('btn-graph-full');
+      const btnCan = document.getElementById('btn-graph-canonical');
+      if (mode === 'full') {
+        btnFull.className = 'px-3.5 py-2 rounded-xl text-xs font-bold bg-blue-600 text-white shadow-sm transition';
+        btnCan.className = 'px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 transition';
+      } else {
+        btnCan.className = 'px-3.5 py-2 rounded-xl text-xs font-bold bg-blue-600 text-white shadow-sm transition';
+        btnFull.className = 'px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 transition';
+      }
+      renderGraphView();
+    }
+
+    function renderGraphView() {
+      // Domain Legend
+      const legendEl = document.getElementById('graph-legend');
+      const domains = Array.from(new Set(state.pages.map(p => p.domain)));
+      legendEl.innerHTML = domains.map(d => `
+        <span class="inline-flex items-center gap-1.5 bg-slate-100 px-2.5 py-1 rounded-full font-medium text-slate-700">
+          <span class="w-2.5 h-2.5 rounded-full" style="background:${DOMAIN_COLORS[d] || '#64748b'}"></span>
+          ${d}
+        </span>
+      `).join('');
+
+      // Configure iteration slider
+      const activeHistory = state.graphMode === 'canonical'
+        ? state.canonicalResult.history
+        : state.prHistory;
+
+      const slider = document.getElementById('iter-slider');
+      slider.max = Math.max(0, activeHistory.length - 1);
+      slider.value = slider.max;
+      updateIterationDisplay(Number(slider.value));
+
+      drawD3NetworkGraph();
+      renderPRDistributionChart();
+      renderCanonicalTraceTable();
+    }
+
+    function handleIterationScrub(val) {
+      updateIterationDisplay(Number(val));
+      drawD3NetworkGraph(Number(val));
+    }
+
+    function stepIteration(delta) {
+      const slider = document.getElementById('iter-slider');
+      const nextVal = Math.min(Number(slider.max), Math.max(0, Number(slider.value) + delta));
+      slider.value = nextVal;
+      handleIterationScrub(nextVal);
+    }
+
+    function updateIterationDisplay(iterIdx) {
+      const activeHistory = state.graphMode === 'canonical'
+        ? state.canonicalResult.history
+        : state.prHistory;
+      const snap = activeHistory[iterIdx] || activeHistory[activeHistory.length - 1];
+      if (!snap) return;
+      document.getElementById('iter-badge').textContent = `Iter ${snap.iter} / ${activeHistory.length - 1}`;
+      document.getElementById('iter-delta-label').textContent =
+        snap.iter === 0 ? 'Initial 1/N' : `Max Δ = ${snap.delta.toExponential(2)}`;
+    }
+
+    function drawD3NetworkGraph(iterIdxOverride = null) {
+      const svg = d3.select('#pagerank-svg');
+      svg.selectAll('*').remove();
+
+      const container = svg.node().parentElement;
+      const width = container.clientWidth || 700;
+      const height = container.clientHeight || 500;
+
+      const isCanonical = state.graphMode === 'canonical';
+      const activeHistory = isCanonical ? state.canonicalResult.history : state.prHistory;
+      const
